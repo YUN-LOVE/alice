@@ -1,4 +1,4 @@
-# 情绪引擎配置（阶段三启用）
+# 情绪引擎配置
 emotion:
   # 情绪维度
   dimensions:
@@ -16,13 +16,31 @@ emotion:
     焦虑: 0.1
     好奇: 0.5
 
-  # 情绪自然衰减率（每秒衰减比例）
-  decay_rate: 0.001
+  # 情绪自然衰减率（每秒趋近 baseline 的比例）
+  decay_rate: 0.0008
 
-  # 触发主动输出的阈值
-  proactive_threshold: 0.8
+  # 情绪回归基线（长时间无刺激后回到的值）
+  baseline:
+    开心: 0.4
+    失落: 0.1
+    温柔: 0.3
+    焦虑: 0.1
+    好奇: 0.5
+
+  # 情绪值上限（防止无限累积）
+  max_value: 1.0
+
+  # 主动推送
+  proactive:
+    enabled: true
+    # 任一维度超此阈值触发主动推送
+    threshold: 0.7
+    # 两次主动推送的最小间隔（秒），防止打扰
+    cooldown_seconds: 600
+    # 情绪 tick 间隔（秒）
+    tick_seconds: 1
 
   # 情绪状态持久化
   persistence:
     enabled: true
-    ttl_seconds: 86400
+    ttl_seconds: 604800

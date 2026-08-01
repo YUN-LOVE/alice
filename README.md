@@ -91,7 +91,7 @@ config/
 | 阶段一 | 对话闭环：Config + LLM（流式/Function Calling 预留/Mock）+ WebSocket + 前端对话页 | ✅ 完成 |
 | 阶段一+ | 前后端解耦：运行时后端地址、CORS、多会话（session_id） | ✅ 完成 |
 | 阶段二 | 记忆系统：Memory Block（去重/容量）+ RAG（Embedding + Redis 检索 + 落库） | ✅ 完成 |
-| 阶段三 | 情绪引擎：高维向量、事件驱动、时间衰减、主动推送 | ⏳ 规划中 |
+| 阶段三 | 情绪引擎：高维向量、事件驱动、时间衰减、主动推送、持久化 | ✅ 完成 |
 | 阶段四 | MCP 层：MCP Manager + 注册表 + TTS/STT/Vision/Search | ⏳ 规划中 |
 | 阶段五 | 前端补全：设置面板、MCP 市场、情绪可视化、主题切换 | ⏳ 规划中 |
 

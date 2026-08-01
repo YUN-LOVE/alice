@@ -19,11 +19,50 @@ type WsMessage struct {
 	Payload json.RawMessage `json:"payload,omitempty"`
 }
 
+// Hub 连接注册表：支持主动广播（情绪推送等）
+type Hub struct {
+	mu      sync.Mutex
+	clients map[*Client]struct{}
+}
+
+func NewHub() *Hub {
+	return &Hub{clients: make(map[*Client]struct{})}
+}
+
+func (h *Hub) register(c *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.clients[c] = struct{}{}
+}
+
+func (h *Hub) unregister(c *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.clients, c)
+}
+
+// Broadcast 向所有连接广播消息
+func (h *Hub) Broadcast(msg WsMessage) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		select {
+		case c.send <- data:
+		default:
+		}
+	}
+}
+
 // Client 单个 WebSocket 连接
 type Client struct {
 	conn      *websocket.Conn
 	send      chan []byte
 	kernel    *kernel.Kernel
+	hub       *Hub
 	close     chan struct{}
 	once      sync.Once
 	sessionID string
@@ -42,7 +81,7 @@ const (
 )
 
 // HandleWebSocket 升级 HTTP 连接为 WebSocket
-func HandleWebSocket(k *kernel.Kernel) http.HandlerFunc {
+func HandleWebSocket(hub *Hub, k *kernel.Kernel) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -53,11 +92,13 @@ func HandleWebSocket(k *kernel.Kernel) http.HandlerFunc {
 			conn:   conn,
 			send:   make(chan []byte, 256),
 			kernel: k,
+			hub:    hub,
 			close:  make(chan struct{}),
 		}
+		hub.register(c)
 		go c.writePump()
 		go c.readPump()
-		log.Printf("[ws] 新连接: %s", r.RemoteAddr)
+		log.Printf("[ws] 新连接: %s（当前 %d 个连接）", r.RemoteAddr, hub.count())
 	}
 }
 
@@ -65,9 +106,11 @@ func HandleWebSocket(k *kernel.Kernel) http.HandlerFunc {
 func (c *Client) readPump() {
 	defer func() {
 		c.shutdown()
+		if c.hub != nil {
+			c.hub.unregister(c)
+		}
 		c.conn.Close()
 	}()
-
 	c.conn.SetReadLimit(64 * 1024)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
@@ -135,6 +178,12 @@ func (c *Client) handle(msg WsMessage) error {
 	}
 }
 
+func (h *Hub) count() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.clients)
+}
+
 // handleUserMessage 走 Kernel 主流程，流式转发回复
 func (c *Client) handleUserMessage(text string) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -155,8 +204,23 @@ func (c *Client) handleUserMessage(text string) error {
 			cancel()
 			return err
 		}
+		if chunk.Done {
+			// 回复结束，推送情绪状态更新
+			c.pushEmotion()
+		}
 	}
 	return nil
+}
+
+// pushEmotion 推送当前情绪状态给该客户端
+func (c *Client) pushEmotion() {
+	state := c.kernel.Emotion().State()
+	desc, _, top := c.kernel.Emotion().Summary()
+	_ = c.sendJSON(WsMessage{Type: "emotion_update", Payload: mustJSON(map[string]any{
+		"state":       state,
+		"description": desc,
+		"top":         top,
+	})})
 }
 
 // writePump 统一发送队列 + 心跳

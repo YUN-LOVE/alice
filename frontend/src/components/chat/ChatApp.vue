@@ -57,9 +57,9 @@ onUnmounted(() => unwatch?.())
     <!-- 输入区 -->
     <footer class="border-t border-zinc-800 px-4 py-3">
       <MessageInput />
-      <!-- 底部状态栏（阶段占位） -->
+      <!-- 底部状态栏 -->
       <div class="mt-2 flex gap-4 text-xs text-zinc-500">
-        <span>😊 开心</span>
+        <span>😊 {{ chat.emotion.top || '平静' }}</span>
         <span>💾 记忆: {{ chat.memoryCount }} 条</span>
         <span>🔌 MCP: 0 个已安装</span>
       </div>

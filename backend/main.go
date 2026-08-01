@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -33,12 +34,19 @@ func main() {
 	}
 
 	log.SetOutput(os.Stdout)
-	log.Printf("Alice 启动 | LLM: %s", cfg.Kernel.LLM.Provider)
+	log.Printf("Alice 启动 | LLM: %s | Embedding: %s", cfg.Kernel.LLM.Provider, cfg.RAG.Embedding.Model)
 
 	k := kernel.NewKernel(cfg)
+	hub := server.NewHub()
+
+	// 主动推送：情绪超阈值时广播给所有连接
+	k.OnProactive(func(text string) {
+		payload, _ := json.Marshal(map[string]any{"text": text})
+		hub.Broadcast(server.WsMessage{Type: "proactive_message", Payload: payload})
+	})
 
 	mux := http.NewServeMux()
-	mux.Handle(cfg.Main.Server.WSPath, server.HandleWebSocket(k))
+	mux.Handle(cfg.Main.Server.WSPath, server.HandleWebSocket(hub, k))
 	server.RegisterRoutes(mux, k)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Main.Server.Host, cfg.Main.Server.Port)

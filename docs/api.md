@@ -45,8 +45,8 @@ HTTP API:      http://host:port/api/v1/...
 | `pong` | `{ "time" }` | 心跳回复 | ✅ 已实现 |
 | `error` | `{ "message" }` | 错误 | ✅ 已实现 |
 | `assistant_audio` | `{...}` | 回复音频（TTS） | 🚧 规划中 |
-| `proactive_message` | `{ "text" }` | 主动推送（情绪阈值触发） | 🚧 规划中 |
-| `emotion_update` | `{...}` | 情绪状态更新 | 🚧 规划中 |
+| `proactive_message` | `{ "text" }` | 主动推送（情绪超阈值触发） | ✅ 已实现 |
+| `emotion_update` | `{ "state", "description", "top" }` | 情绪状态更新（回复结束时推送） | ✅ 已实现 |
 | `mcp_capabilities` | `{...}` | MCP 能力更新 | 🚧 规划中 |
 | `settings_update_ack` | `{...}` | 配置修改确认 | 🚧 规划中 |
 | `mcp_*_ack` | `{...}` | MCP 操作确认 | 🚧 规划中 |

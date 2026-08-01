@@ -24,6 +24,10 @@ export const useChatStore = defineStore('chat', {
     memoryCount: 0,
     settingsOpen: false,
     initialized: false,
+    emotion: {
+      top: '',
+      state: {} as Record<string, number>,
+    },
   }),
 
   actions: {
@@ -44,6 +48,16 @@ export const useChatStore = defineStore('chat', {
       })
       ws.on('assistant_chunk', (p) => {
         this.onAssistantChunk(p)
+      })
+      ws.on('emotion_update', (p) => {
+        this.emotion = {
+          top: p.top ?? '',
+          state: p.state ?? {},
+        }
+      })
+      ws.on('proactive_message', (p) => {
+        // 主动推送：作为 Alice 的消息展示
+        this.pushAssistant(p.text ?? '')
       })
       ws.on('error', (p) => {
         this.pushAssistant(p.message ?? '出错了')

@@ -34,13 +34,23 @@ context:
 `,
 		"emotion.yaml": `
 emotion:
-  dimensions: [开心]
+  dimensions: [开心, 失落]
+  initial:
+    开心: 0.4
+  baseline:
+    开心: 0.4
   decay_rate: 0.002
+  proactive:
+    enabled: true
+    threshold: 0.7
+    cooldown_seconds: 600
 `,
 		"emotion_events.yaml": `
 events:
   user_greeting:
-    开心: 0.05
+    keywords: [你好]
+    changes:
+      开心: 0.05
 `,
 		"memory_rag.yaml": `
 rag:
@@ -65,7 +75,14 @@ mcp:
   auto_start: true
 `,
 		"prompts/system_prompt.txt": "你是 Alice",
-	}
+		"prompts/emotion_templates.yaml": `
+templates:
+  - name: calm
+    conditions:
+      开心: [0.2, 0.6]
+    text: "你此刻心情平静"
+    proactive: "在吗"
+`,	}
 
 	for name, content := range files {
 		path := filepath.Join(dir, name)
@@ -91,7 +108,7 @@ mcp:
 		{"main.ws_path", cfg.Main.Server.WSPath, "/ws"},
 		{"kernel.llm.model", cfg.Kernel.LLM.Model, "deepseek-chat"},
 		{"kernel.context.max", cfg.Kernel.Context.MaxMessages, 42},
-		{"emotion.dimensions", cfg.Emotion.Dimensions, []string{"开心"}},
+		{"emotion.decay_rate", cfg.Emotion.DecayRate, 0.002},
 		{"rag.embedding.model", cfg.RAG.Embedding.Model, "BAAI/bge-m3"},
 		{"rag.redis.addr", cfg.RAG.Redis.Addr, "1.2.3.4:6379"},
 		{"rag.retrieval.top_k", cfg.RAG.Retrieval.TopK, 7},
@@ -99,7 +116,6 @@ mcp:
 		{"mcp.auto_start", cfg.MCP.AutoStart, true},
 		{"system_prompt", cfg.Kernel.SystemPrompt, "你是 Alice"},
 	}
-
 	for _, tt := range tests {
 		switch want := tt.want.(type) {
 		case int:
@@ -114,10 +130,20 @@ mcp:
 			if got := tt.got.(bool); got != want {
 				t.Errorf("%s = %v, want %v", tt.name, got, want)
 			}
+		case float64:
+			if got := tt.got.(float64); got != want {
+				t.Errorf("%s = %v, want %v", tt.name, got, want)
+			}
 		}
 	}
 
-	if len(cfg.Emotion.Dimensions) != 1 || cfg.Emotion.Dimensions[0] != "开心" {
+	if len(cfg.Emotion.Dimensions) != 2 || cfg.Emotion.Dimensions[0] != "开心" {
 		t.Errorf("emotion.dimensions 解析错误: %v", cfg.Emotion.Dimensions)
+	}
+	if cfg.Emotion.EventMap["user_greeting"].Changes["开心"] != 0.05 {
+		t.Errorf("emotion_events 解析错误: %v", cfg.Emotion.EventMap)
+	}
+	if len(cfg.Emotion.Templates) != 1 || cfg.Emotion.Templates[0].Name != "calm" {
+		t.Errorf("emotion_templates 解析错误: %v", cfg.Emotion.Templates)
 	}
 }

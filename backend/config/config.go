@@ -43,14 +43,36 @@ type KernelConfig struct {
 	SystemPrompt string `yaml:"-"`
 }
 
+type EmotionEvent struct {
+	Keywords []string          `yaml:"keywords"`
+	Changes  map[string]float64 `yaml:"changes"`
+}
+
+type EmotionTemplate struct {
+	Name       string                 `yaml:"name"`
+	Conditions map[string][2]float64  `yaml:"conditions"`
+	Text       string                 `yaml:"text"`
+	Proactive  string                 `yaml:"proactive"`
+}
+
 type EmotionConfig struct {
-	Dimensions          []string                      `yaml:"dimensions"`
-	Initial             map[string]float64            `yaml:"initial"`
-	DecayRate           float64                       `yaml:"decay_rate"`
-	ProactiveThreshold  float64                       `yaml:"proactive_threshold"`
-	Persistence         map[string]interface{}        `yaml:"persistence"`
-	EventMap            map[string]map[string]float64 `yaml:"-"`
-	EmotionTemplates    map[string]interface{}        `yaml:"-"`
+	Dimensions []string          `yaml:"dimensions"`
+	Initial    map[string]float64 `yaml:"initial"`
+	Baseline   map[string]float64 `yaml:"baseline"`
+	DecayRate  float64           `yaml:"decay_rate"`
+	MaxValue   float64           `yaml:"max_value"`
+	Proactive  struct {
+		Enabled       bool    `yaml:"enabled"`
+		Threshold     float64 `yaml:"threshold"`
+		CooldownSec   int     `yaml:"cooldown_seconds"`
+		TickSec       int     `yaml:"tick_seconds"`
+	} `yaml:"proactive"`
+	Persistence struct {
+		Enabled bool `yaml:"enabled"`
+		TTLSec  int  `yaml:"ttl_seconds"`
+	} `yaml:"persistence"`
+	EventMap  map[string]EmotionEvent `yaml:"-"`
+	Templates []EmotionTemplate       `yaml:"-"`
 }
 
 type RAGConfig struct {
@@ -109,6 +131,19 @@ func Load(configDir string) (*Config, error) {
 	if cfg.MCP, err = loadNamed[MCPConfig](configDir, "mcp.yaml", "mcp"); err != nil {
 		return nil, err
 	}
+
+	// 情绪事件映射与情绪模板（独立文件）
+	eventMap, err := loadNamed[map[string]EmotionEvent](configDir, "emotion_events.yaml", "events")
+	if err != nil {
+		return nil, err
+	}
+	cfg.Emotion.EventMap = *eventMap
+
+	tpls, err := loadNamed[[]EmotionTemplate](configDir, "prompts/emotion_templates.yaml", "templates")
+	if err != nil {
+		return nil, err
+	}
+	cfg.Emotion.Templates = *tpls
 
 	// System Prompt（阶段一即启用）
 	promptBytes, err := os.ReadFile(filepath.Join(configDir, "prompts", "system_prompt.txt"))
