@@ -1,0 +1,28 @@
+# 情绪引擎配置（阶段三启用）
+emotion:
+  # 情绪维度
+  dimensions:
+    - 开心
+    - 失落
+    - 温柔
+    - 焦虑
+    - 好奇
+
+  # 初始情绪向量（0~1）
+  initial:
+    开心: 0.4
+    失落: 0.1
+    温柔: 0.3
+    焦虑: 0.1
+    好奇: 0.5
+
+  # 情绪自然衰减率（每秒衰减比例）
+  decay_rate: 0.001
+
+  # 触发主动输出的阈值
+  proactive_threshold: 0.8
+
+  # 情绪状态持久化
+  persistence:
+    enabled: true
+    ttl_seconds: 86400

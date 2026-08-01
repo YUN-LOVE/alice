@@ -1,0 +1,18 @@
+# 情绪状态 → 文本描述映射（阶段三启用）
+# 高维情绪向量被分类后，用这里的文本注入 prompt
+templates:
+  calm:
+    happy: [0.3, 0.7]
+    description: "你此刻心情平静，温和自然。"
+  happy:
+    happy: [0.7, 1.0]
+    description: "你此刻心情很好，语气轻快，带着真诚的喜悦。"
+  sad:
+    sad: [0.5, 1.0]
+    description: "你此刻有些低落，语气更温柔、更有耐心。"
+  curious:
+    curious: [0.6, 1.0]
+    description: "你此刻充满好奇，会主动追问、探索话题。"
+  anxious:
+    anxious: [0.5, 1.0]
+    description: "你此刻有些不安，回复更谨慎，会多关心用户的近况。"

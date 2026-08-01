@@ -1,0 +1,15 @@
+# Kernel 配置
+llm:
+  # OpenAI 兼容 API
+  provider: "deepseek"          # deepseek / openai / siliconflow / mock
+  base_url: "https://api.deepseek.com/v1"
+  api_key: ""                   # 留空则使用 mock 模式
+  model: "deepseek-chat"
+  temperature: 0.8
+  max_tokens: 2048
+  stream: true
+
+# 上下文
+context:
+  # Memory Block 最大条数（0 = 无限，阶段一暂未启用）
+  max_messages: 200

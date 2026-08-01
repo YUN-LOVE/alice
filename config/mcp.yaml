@@ -1,0 +1,12 @@
+# MCP 配置（阶段四启用）
+mcp:
+  # 注册表数据源: 本地文件或远程 URL
+  registry:
+    source: "file"
+    file: "./registry/registry.json"
+
+  # 已安装的 MCP Server 列表
+  servers: []
+
+  # 启动时自动拉起已启用的 MCP
+  auto_start: true

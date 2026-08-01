@@ -1,0 +1,6 @@
+# Memory Block 短期工作记忆配置（阶段二启用）
+memory_block:
+  # 最大条数（0 = 无限，建议不设无限防止上下文膨胀）
+  max_entries: 200
+  # 前端只读，不能删除
+  read_only: true

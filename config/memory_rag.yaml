@@ -1,0 +1,19 @@
+# RAG 长期记忆配置（阶段二启用）
+rag:
+  embedding:
+    provider: "siliconflow"
+    base_url: "https://api.siliconflow.cn/v1"
+    api_key: ""
+    model: "BAAI/bge-m3"
+
+  redis:
+    addr: "127.0.0.1:6379"
+    password: ""
+    db: 0
+
+  retrieval:
+    top_k: 5
+    min_score: 0.3
+
+  # 每轮自动存储
+  store_every_turn: true

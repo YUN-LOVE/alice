@@ -1,0 +1,16 @@
+---
+import ChatApp from '../components/chat/ChatApp.vue'
+import '../styles/global.css'
+---
+
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>Alice</title>
+	</head>
+	<body class="bg-zinc-950">
+		<ChatApp client:only="vue" />
+	</body>
+</html>

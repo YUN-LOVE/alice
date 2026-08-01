@@ -1,0 +1,20 @@
+# 事件 → 情绪向量变化映射（阶段三启用）
+# 格式: 事件名: {维度: 变化量, ...}
+events:
+  user_greeting:
+    开心: 0.05
+    温柔: 0.02
+  user_share_good_news:
+    开心: 0.2
+  user_share_bad_news:
+    失落: 0.15
+    温柔: 0.1
+  user_compliment:
+    开心: 0.15
+    温柔: 0.05
+  user_argue:
+    失落: 0.1
+    焦虑: 0.1
+  user_silent_long_time:
+    失落: 0.05
+    焦虑: 0.08
