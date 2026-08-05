@@ -55,7 +55,7 @@ func NewKernel(cfg *config.Config) *Kernel {
 		rag:    rag,
 		block:  memory.NewBlock(cfg.Block.MaxEntries),
 		engine: buildEmotion(cfg),
-		mcp:    mcp.NewManager(cfg.MCP.AutoStart, cfg.RAG.Redis.Addr, cfg.RAG.Redis.Password, cfg.RAG.Redis.DB),
+		mcp:    mcp.NewManager(cfg.MCP.AutoStart, cfg.RAG.Redis.Addr, cfg.RAG.Redis.Password, cfg.RAG.Redis.DB, time.Duration(cfg.MCP.TimeoutSec)*time.Second),
 		// 初始化活跃时间，避免启动时零值被误判为"长时间无互动"
 		lastActive: time.Now(),
 	}

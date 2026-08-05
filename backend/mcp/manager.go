@@ -52,13 +52,18 @@ type Manager struct {
 	servers   map[string]*ManagedServer
 	autoStart bool
 	rdb       *redis.Client
+	timeout   time.Duration // 启动超时
 }
 
 // NewManager 创建 Manager
-func NewManager(autoStart bool, redisAddr, redisPassword string, redisDB int) *Manager {
+func NewManager(autoStart bool, redisAddr, redisPassword string, redisDB int, timeout time.Duration) *Manager {
 	m := &Manager{
 		servers:   make(map[string]*ManagedServer),
 		autoStart: autoStart,
+		timeout:   timeout,
+	}
+	if timeout <= 0 {
+		m.timeout = 30 * time.Second
 	}
 	if redisAddr != "" {
 		m.rdb = redis.NewClient(&redis.Options{
@@ -146,7 +151,7 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 	}
 
 	var conn MCPConn
-	cfg := ClientConfig{Timeout: 10 * time.Second}
+	cfg := ClientConfig{Timeout: m.timeout}
 	if s.Transport == "http" {
 		conn = &HTTPClient{}
 		cfg.URL = s.URL

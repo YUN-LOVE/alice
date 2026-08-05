@@ -58,3 +58,6 @@ mcp:
 
   # 启动时自动拉起已启用的 MCP
   auto_start: true
+
+  # MCP Server 启动超时（秒）——npx 首次下载/启动可能较慢
+  timeout_seconds: 90

@@ -128,6 +128,7 @@ type MCPConfig struct {
 	} `yaml:"registry"`
 	Servers   []MCPServerConfig `yaml:"servers"`
 	AutoStart bool              `yaml:"auto_start"`
+	TimeoutSec int              `yaml:"timeout_seconds"` // MCP 启动超时（秒）
 }
 
 // Load 从 configDir 加载全部 YAML 配置

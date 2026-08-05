@@ -72,7 +72,7 @@ func TestManagerCall(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	m := NewManager(true, "", "", 0)
+	m := NewManager(true, "", "", 0, 15*time.Second)
 	m.Add("local", "本地工具", config.MCPServerConfig{
 		Command: bin,
 		Enabled: true,
