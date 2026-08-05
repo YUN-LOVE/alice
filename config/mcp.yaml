@@ -21,19 +21,29 @@ mcp:
       env: []
       enabled: true
 
-    # 搜索（Brave，需 BRAVE_API_KEY，免费 2000 次/月；key 用启动环境变量注入，不进配置文件）
+    # 搜索（Tavily：免费 1000 次/月，注册无需信用卡，仅邮箱）。
+    # 无 TAVILY_API_KEY 时进入 keyless 模式（搜索可用）；配 key 更稳定。
+    # 启动 shell 里 export TAVILY_API_KEY=tvly-xxx 注入
     - id: "search"
       name: "搜索"
       command: "npx"
-      args: ["-y", "@modelcontextprotocol/server-brave-search"]
+      args: ["-y", "tavily-mcp"]
       env: []
       enabled: true
 
-    # 备用：DuckDuckGo 免费搜索（无需 key，但免费后端可能被反爬限流）
+    # 备用：DuckDuckGo 免费搜索（无需任何 key/信用卡，但免费后端可能被反爬限流）
     # - id: "search-ddg"
     #   name: "搜索(DDG)"
     #   command: "npx"
     #   args: ["-y", "duckduckgo-mcp-server"]
+    #   env: []
+    #   enabled: false
+
+    # Brave 官方搜索（免费额度但注册需信用卡验证，暂不用）
+    # - id: "search-brave"
+    #   name: "搜索(Brave)"
+    #   command: "npx"
+    #   args: ["-y", "@modelcontextprotocol/server-brave-search"]
     #   env: []
     #   enabled: false
 
