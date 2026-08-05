@@ -1,1 +1,18 @@
 @import "tailwindcss";
+
+/* 亮色主题：通过覆盖 Tailwind 的 zinc 调色板变量实现，
+   所有使用 zinc-* 类的组件自动切换，无需逐处修改 */
+html.light {
+  --color-zinc-950: oklch(0.985 0 0);
+  --color-zinc-900: oklch(0.97 0 0);
+  --color-zinc-800: oklch(0.9 0 0);
+  --color-zinc-700: oklch(0.8 0 0);
+  --color-zinc-600: oklch(0.45 0 0);
+  --color-zinc-500: oklch(0.5 0 0);
+  --color-zinc-400: oklch(0.45 0 0);
+  --color-zinc-300: oklch(0.4 0 0);
+  --color-zinc-200: oklch(0.3 0 0);
+  --color-zinc-100: oklch(0.2 0 0);
+  --color-zinc-50: oklch(0.15 0 0);
+}
+

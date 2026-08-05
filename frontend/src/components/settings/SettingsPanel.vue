@@ -65,6 +65,18 @@ function useDefault() {
         <span v-if="connecting" class="text-zinc-400">重连中...</span>
       </div>
 
+      <!-- 连接信息 -->
+      <div v-if="chat.serverInfo" class="mt-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs">
+        <div class="flex justify-between">
+          <span class="text-zinc-500">LLM</span>
+          <span class="text-zinc-300">{{ chat.serverInfo.llm }}</span>
+        </div>
+        <div class="mt-1 flex justify-between">
+          <span class="text-zinc-500">版本</span>
+          <span class="text-zinc-300">{{ chat.serverInfo.version }}</span>
+        </div>
+      </div>
+
       <div class="mt-5 flex justify-end gap-2">
         <button
           class="rounded-lg px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800"

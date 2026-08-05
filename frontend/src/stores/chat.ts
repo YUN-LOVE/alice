@@ -23,6 +23,9 @@ export const useChatStore = defineStore('chat', {
     backendUrl: '',
     memoryCount: 0,
     settingsOpen: false,
+    panelOpen: false,
+    panelTab: 'memory' as 'memory' | 'mcp' | 'emotion',
+    theme: 'dark' as 'dark' | 'light',
     initialized: false,
     emotion: {
       top: '',
@@ -36,6 +39,13 @@ export const useChatStore = defineStore('chat', {
       this.initialized = true
       await ensureConfig()
       this.backendUrl = getBackendUrl()
+
+      // 恢复主题
+      const savedTheme = localStorage.getItem('alice.theme')
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        this.theme = savedTheme
+      }
+      this.applyTheme()
 
       ws.on('$open', () => {
         this.connected = true
@@ -115,6 +125,16 @@ export const useChatStore = defineStore('chat', {
     pushAssistant(text: string) {
       this.messages.push({ id: ++msgId, role: 'assistant', content: text })
       this.sending = false
+    },
+
+    toggleTheme() {
+      this.theme = this.theme === 'dark' ? 'light' : 'dark'
+      localStorage.setItem('alice.theme', this.theme)
+      this.applyTheme()
+    },
+
+    applyTheme() {
+      document.documentElement.classList.toggle('light', this.theme === 'light')
     },
 
     reset() {
