@@ -64,11 +64,15 @@ type EmotionConfig struct {
 	Baseline   map[string]float64 `yaml:"baseline"`
 	DecayRate  float64           `yaml:"decay_rate"`
 	MaxValue   float64           `yaml:"max_value"`
+	// 关系矩阵：目标维度 ← 来源维度: 系数（正=促进，负=抑制），tick 时演化（漂移/拮抗）
+	Relations  map[string]map[string]float64 `yaml:"relations"`
 	Proactive  struct {
-		Enabled       bool    `yaml:"enabled"`
-		Threshold     float64 `yaml:"threshold"`
-		CooldownSec   int     `yaml:"cooldown_seconds"`
-		TickSec       int     `yaml:"tick_seconds"`
+		Enabled          bool    `yaml:"enabled"`
+		Threshold        float64 `yaml:"threshold"`
+		CooldownSec      int     `yaml:"cooldown_seconds"`
+		TickSec          int     `yaml:"tick_seconds"`
+		SilentAfterMin   int     `yaml:"silent_after_minutes"` // 用户长时间无互动触发主动关心，0=关闭
+		Hours            []int   `yaml:"hours"`                // 允许主动推送的小时段 [起, 止]，空=不限
 	} `yaml:"proactive"`
 	Persistence struct {
 		Enabled bool `yaml:"enabled"`

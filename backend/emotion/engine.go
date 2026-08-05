@@ -99,7 +99,7 @@ func (e *Engine) ProcessEvent(eventName string) map[string]float64 {
 	return e.cloneLocked()
 }
 
-// Tick 时间演化：情绪自然衰减，向 baseline 回归
+// Tick 时间演化：情绪自然衰减趋近 baseline + 关系矩阵漂移/拮抗
 func (e *Engine) Tick() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -115,6 +115,22 @@ func (e *Engine) Tick() {
 	for dim, v := range e.vector {
 		base := e.cfg.Baseline[dim]
 		e.vector[dim] = clamp(base+(v-base)*factor, 0, e.cfg.MaxValue)
+	}
+
+	// 关系矩阵：目标维度受来源维度影响（漂移/拮抗）
+	for target, sources := range e.cfg.Relations {
+		tv, ok := e.vector[target]
+		if !ok {
+			continue
+		}
+		for src, coef := range sources {
+			sv, ok := e.vector[src]
+			if !ok {
+				continue
+			}
+			tv += coef * sv * dt
+		}
+		e.vector[target] = clamp(tv, 0, e.cfg.MaxValue)
 	}
 }
 
@@ -236,6 +252,87 @@ func (e *Engine) load(ctx context.Context) error {
 	}
 	log.Printf("[emotion] 已恢复持久化情绪状态: %v", e.vector)
 	return nil
+}
+
+// ==================== 情绪记忆（显著事件记录） ====================
+
+const eventListKey = "alice:emotion:events"
+
+// EmotionEventRecord 一条情绪事件记录
+type EmotionEventRecord struct {
+	Time    int64            `json:"time"`
+	Event   string           `json:"event"`
+	Delta   map[string]float64 `json:"delta"`
+	State   map[string]float64 `json:"state"`
+}
+
+// significantDelta 判断事件是否显著（任一维度变化量超过阈值）
+func significantDelta(delta map[string]float64) bool {
+	for _, v := range delta {
+		if v < -0.1 || v > 0.1 {
+			return true
+		}
+	}
+	return false
+}
+
+// RecordEvent 记录一次情绪事件（仅显著事件，保留最近 500 条）
+func (e *Engine) RecordEvent(eventName string) {
+	if e.rdb == nil {
+		return
+	}
+	event, ok := e.cfg.EventMap[eventName]
+	if !ok {
+		event = e.cfg.EventMap["default"]
+	}
+	if !significantDelta(event.Changes) {
+		return
+	}
+
+	e.mu.Lock()
+	state := e.cloneLocked()
+	e.mu.Unlock()
+
+	rec := EmotionEventRecord{
+		Time:  time.Now().Unix(),
+		Event: eventName,
+		Delta: event.Changes,
+		State: state,
+	}
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	pipe := e.rdb.TxPipeline()
+	pipe.LPush(ctx, eventListKey, data)
+	pipe.LTrim(ctx, eventListKey, 0, 499)
+	_, _ = pipe.Exec(ctx)
+}
+
+// Events 查询最近的情绪事件（最新在前）
+func (e *Engine) Events(ctx context.Context, limit int) ([]EmotionEventRecord, error) {
+	if e.rdb == nil {
+		return nil, nil
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	data, err := e.rdb.LRange(ctx, eventListKey, 0, int64(limit-1)).Result()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]EmotionEventRecord, 0, len(data))
+	for _, d := range data {
+		var rec EmotionEventRecord
+		if err := json.Unmarshal([]byte(d), &rec); err != nil {
+			continue
+		}
+		out = append(out, rec)
+	}
+	return out, nil
 }
 
 // ==================== 工具 ====================

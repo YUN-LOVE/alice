@@ -127,6 +127,22 @@ func RegisterRoutes(mux *http.ServeMux, k *kernel.Kernel) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
+
+	// 情绪显著事件记录
+	mux.HandleFunc("GET /api/v1/emotion/events", func(w http.ResponseWriter, r *http.Request) {
+		limit := 50
+		if v := r.URL.Query().Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				limit = n
+			}
+		}
+		events, err := k.EmotionEvents(r.Context(), limit)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "查询情绪事件失败: " + err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	})
 }
 
 func memoryCount(w http.ResponseWriter, r *http.Request, k *kernel.Kernel) int64 {

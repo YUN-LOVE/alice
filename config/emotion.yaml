@@ -30,6 +30,18 @@ emotion:
   # 情绪值上限（防止无限累积）
   max_value: 1.0
 
+  # 情绪关系矩阵：目标维度 ← 来源维度: 系数（正=促进，负=抑制）
+  # tick 时按 系数 × 来源维度值 演化目标维度（漂移/拮抗）
+  relations:
+    开心:
+      焦虑: -0.08
+    失落:
+      开心: -0.05
+    焦虑:
+      失落: 0.04
+    温柔:
+      焦虑: -0.04
+
   # 主动推送
   proactive:
     enabled: true
@@ -39,6 +51,10 @@ emotion:
     cooldown_seconds: 600
     # 情绪 tick 间隔（秒）
     tick_seconds: 1
+    # 用户长时间无互动触发主动关心（分钟，0=关闭）
+    silent_after_minutes: 30
+    # 允许主动推送的小时段 [起, 止]，空=不限
+    hours: [8, 23]
 
   # 情绪状态持久化
   persistence:

@@ -19,10 +19,12 @@ func testConfig() *config.EmotionConfig {
 		DecayRate: 0.01,
 		MaxValue:  1.0,
 		Proactive: struct {
-			Enabled       bool    `yaml:"enabled"`
-			Threshold     float64 `yaml:"threshold"`
-			CooldownSec   int     `yaml:"cooldown_seconds"`
-			TickSec       int     `yaml:"tick_seconds"`
+			Enabled        bool    `yaml:"enabled"`
+			Threshold      float64 `yaml:"threshold"`
+			CooldownSec    int     `yaml:"cooldown_seconds"`
+			TickSec        int     `yaml:"tick_seconds"`
+			SilentAfterMin int     `yaml:"silent_after_minutes"`
+			Hours          []int   `yaml:"hours"`
 		}{Enabled: true, Threshold: 0.7, CooldownSec: 600, TickSec: 1},
 		Persistence: struct {
 			Enabled bool `yaml:"enabled"`
@@ -129,5 +131,44 @@ func TestShouldProactive(t *testing.T) {
 	// 冷却期内不应再次触发
 	if ok2, _ := e.ShouldProactive(); ok2 {
 		t.Fatal("冷却期内不应重复触发")
+	}
+}
+
+// TestRelationsMatrix 关系矩阵：焦虑高抑制开心
+func TestRelationsMatrix(t *testing.T) {
+	cfg := testConfig()
+	cfg.Relations = map[string]map[string]float64{
+		"开心": {"焦虑": -0.5},
+	}
+	e := New(cfg, "", "", 0)
+
+	// 推高焦虑
+	for i := 0; i < 10; i++ {
+		e.ProcessEvent("user_argue")
+	}
+	e.lastTick = e.lastTick.Add(-time.Second)
+	happyBefore := e.State()["开心"]
+
+	// tick 多次，开心应被焦虑抑制下降
+	for i := 0; i < 10; i++ {
+		e.lastTick = e.lastTick.Add(-time.Second)
+		e.Tick()
+	}
+	happyAfter := e.State()["开心"]
+	if happyAfter >= happyBefore-1e-9 {
+		t.Fatalf("关系矩阵未生效：开心 %v → %v（焦虑 %v）", happyBefore, happyAfter, e.State()["焦虑"])
+	}
+}
+
+// TestSignificantDelta 显著事件判断
+func TestSignificantDelta(t *testing.T) {
+	if !significantDelta(map[string]float64{"开心": 0.2}) {
+		t.Fatal("0.2 变化应为显著")
+	}
+	if significantDelta(map[string]float64{"温柔": 0.05}) {
+		t.Fatal("0.05 变化不应为显著")
+	}
+	if significantDelta(map[string]float64{}) {
+		t.Fatal("空变化不应为显著")
 	}
 }

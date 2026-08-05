@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"alice/config"
 	"alice/emotion"
-	"path/filepath"
 	"alice/mcp"
 	"alice/memory"
 )
@@ -32,6 +33,10 @@ type Kernel struct {
 	mcp         *mcp.Manager
 	registry    *mcp.Registry
 	onProactive func(string)
+
+	silentMu       sync.Mutex
+	lastActive     time.Time
+	silentTriggered bool
 }
 
 // NewKernel 创建 Kernel
@@ -214,7 +219,7 @@ func (k *Kernel) OnProactive(fn func(text string)) {
 // Emotion 暴露情绪引擎（server 层推 emotion_update 用）
 func (k *Kernel) Emotion() *emotion.Engine { return k.engine }
 
-// startEmotionTicker 情绪时间演化 + 主动推送检测
+// startEmotionTicker 情绪时间演化 + 主动推送检测（LLM 生成 + 存记忆 + 广播）
 func (k *Kernel) startEmotionTicker() {
 	tickSec := k.cfg.Emotion.Proactive.TickSec
 	if tickSec <= 0 {
@@ -225,25 +230,108 @@ func (k *Kernel) startEmotionTicker() {
 		defer ticker.Stop()
 		for range ticker.C {
 			k.engine.Tick()
-			if k.onProactive != nil {
-				if should, text := k.engine.ShouldProactive(); should {
-					log.Printf("[kernel] 主动推送: %s", text)
-					k.onProactive(text)
-				}
+			k.checkSilent()
+			if should, _ := k.engine.ShouldProactive(); should {
+				k.triggerProactive()
 			}
 		}
 	}()
+}
+
+// checkSilent 用户长时间无互动：触发 user_silent_long_time 事件（失落/焦虑上升）
+func (k *Kernel) checkSilent() {
+	min := k.cfg.Emotion.Proactive.SilentAfterMin
+	if min <= 0 {
+		return
+	}
+	k.silentMu.Lock()
+	defer k.silentMu.Unlock()
+	if time.Since(k.lastActive) > time.Duration(min)*time.Minute && !k.silentTriggered {
+		k.silentTriggered = true
+		k.engine.ProcessEvent("user_silent_long_time")
+		log.Printf("[kernel] 用户长时间未互动，触发 user_silent_long_time | 状态: %v", roundMap(k.engine.State()))
+	}
+}
+
+// triggerProactive 主动推送：LLM 生成话术 → 存入记忆 → 广播（异步）
+func (k *Kernel) triggerProactive() {
+	if !k.proactiveAllowedNow() {
+		return
+	}
+	go func() {
+		text := k.generateProactive()
+		if text == "" {
+			return
+		}
+		k.storeProactive(text)
+		if k.onProactive != nil {
+			k.onProactive(text)
+		}
+	}()
+}
+
+// proactiveAllowedNow 时段控制（避免深夜打扰）
+func (k *Kernel) proactiveAllowedNow() bool {
+	hours := k.cfg.Emotion.Proactive.Hours
+	if len(hours) < 2 {
+		return true
+	}
+	h := time.Now().Hour()
+	start, end := hours[0], hours[1]
+	if start <= end {
+		return h >= start && h <= end
+	}
+	return h >= start || h <= end // 跨午夜时段
+}
+
+// generateProactive 由 LLM 根据当前情绪生成主动关心的话术（失败/空则放弃）
+func (k *Kernel) generateProactive() string {
+	desc, _, _ := k.engine.Summary()
+	messages := []ChatMessage{
+		{Role: "system", Content: k.cfg.Kernel.SystemPrompt},
+		{Role: "user", Content: "你现在想主动联系用户说句话。" + desc + " 请直接给出一句自然、真诚的关心或问候，一句话即可，不要解释。"},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	ch, err := k.llm.ChatStream(ctx, messages, nil)
+	if err != nil {
+		log.Printf("[kernel] 主动推送生成失败: %v", err)
+		return ""
+	}
+	var sb strings.Builder
+	for c := range ch {
+		sb.WriteString(c.Content)
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+// storeProactive 主动推送消息存入 RAG + Block（Alice 记得自己主动说过什么）
+func (k *Kernel) storeProactive(text string) {
+	today := time.Now().Format("2006-01-02")
+	meta := map[string]any{"time": time.Now().Unix(), "date": today}
+	if _, err := k.rag.Store(context.Background(), "assistant", text, meta); err != nil {
+		log.Printf("[kernel] 主动推送存储失败: %v", err)
+	}
+	k.block.InjectIfAbsent(text, "assistant", "conversation")
+	log.Printf("[kernel] 主动推送已生成并存入记忆: %s", truncateStr(text, 60))
 }
 
 // Process 处理用户消息，返回流式回复片段
 func (k *Kernel) Process(ctx context.Context, sessionID, userText string) (<-chan StreamChunk, error) {
 	_ = sessionID // 阶段三记忆/情绪全局共享
 
-	// [1] 情绪引擎：事件识别 + 更新情绪向量
+	// [1] 情绪引擎：事件识别 + 更新情绪向量 + 记录显著事件
 	event := k.engine.DetectEvent(userText)
 	k.engine.ProcessEvent(event)
+	k.engine.RecordEvent(event)
 	k.engine.Tick()
 	log.Printf("[emotion] 事件=%s 状态=%v", event, roundMap(k.engine.State()))
+
+	// 记录用户活跃时间（silent 检测用）
+	k.silentMu.Lock()
+	k.lastActive = time.Now()
+	k.silentTriggered = false
+	k.silentMu.Unlock()
 
 	// [2] RAG 检索相关历史记忆
 	memories := k.retrieve(ctx, userText)
@@ -532,6 +620,11 @@ func (k *Kernel) LLMName() string { return k.llm.Name() }
 
 // EmbedderName 返回当前 Embedding 名称
 func (k *Kernel) EmbedderName() string { return k.rag.EmbedderName() }
+
+// EmotionEvents 返回最近的情绪显著事件
+func (k *Kernel) EmotionEvents(ctx context.Context, limit int) ([]emotion.EmotionEventRecord, error) {
+	return k.engine.Events(ctx, limit)
+}
 
 // MCP 相关：暴露给 server 层管理外设工具
 
