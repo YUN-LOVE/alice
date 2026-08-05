@@ -31,28 +31,7 @@ type Kernel struct {
 
 // NewKernel 创建 Kernel
 func NewKernel(cfg *config.Config) *Kernel {
-	embedder := memory.NewEmbedder(
-		cfg.RAG.Embedding.Provider,
-		cfg.RAG.Embedding.BaseURL,
-		cfg.RAG.Embedding.APIKey,
-		cfg.RAG.Embedding.Model,
-	)
-
-	// hash 兜底模式（未配 Key）下向量无语义精度，相似度普遍偏低；
-	// 不做绝对过滤，仅靠 topK 排序截断，保证开发链路可测
-	minScore := cfg.RAG.Retrieval.MinScore
-	if _, isHash := embedder.(*memory.HashEmbedder); isHash {
-		minScore = 0
-	}
-
-	rag := memory.NewRAG(
-		cfg.RAG.Redis.Addr,
-		cfg.RAG.Redis.Password,
-		cfg.RAG.Redis.DB,
-		embedder,
-		cfg.RAG.Retrieval.TopK,
-		minScore,
-	)
+	rag := buildRAG(cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -61,18 +40,69 @@ func NewKernel(cfg *config.Config) *Kernel {
 	}
 
 	k := &Kernel{
-		cfg:   cfg,
-		llm:   NewLLMClient(cfg.Kernel.LLM.Provider, cfg.Kernel.LLM.BaseURL, cfg.Kernel.LLM.APIKey, cfg.Kernel.LLM.Model, cfg.Kernel.LLM.Temperature, cfg.Kernel.LLM.MaxTokens),
-		rag:   rag,
-		block: memory.NewBlock(cfg.Block.MaxEntries),
-		engine: emotion.New(cfg.Emotion,
-			cfg.RAG.Redis.Addr,
-			cfg.RAG.Redis.Password,
-			cfg.RAG.Redis.DB,
-		),
+		cfg:    cfg,
+		llm:    buildLLM(cfg),
+		rag:    rag,
+		block:  memory.NewBlock(cfg.Block.MaxEntries),
+		engine: buildEmotion(cfg),
 	}
 	k.startEmotionTicker()
 	return k
+}
+
+// Reload 配置热重载：更新 LLM / 情绪引擎 / RAG 检索参数 / Memory Block 容量
+// 保留 Redis 连接与已存记忆；短期工作记忆内容保留（仅调整容量）
+func (k *Kernel) Reload(cfg *config.Config) {
+	k.cfg = cfg
+	k.llm = buildLLM(cfg)
+	k.engine = buildEmotion(cfg)
+	k.rag.Reconfigure(
+		buildEmbedder(cfg),
+		cfg.RAG.Retrieval.TopK,
+		ragMinScore(cfg),
+	)
+	k.block.SetMaxEntries(cfg.Block.MaxEntries)
+	log.Printf("[kernel] 配置已热重载 | LLM: %s | 情绪恢复: %v", k.llm.Name(), k.engine.State())
+}
+
+func buildLLM(cfg *config.Config) LLMClient {
+	return NewLLMClient(
+		cfg.Kernel.LLM.Provider, cfg.Kernel.LLM.BaseURL, cfg.Kernel.LLM.APIKey,
+		cfg.Kernel.LLM.Model, cfg.Kernel.LLM.Temperature, cfg.Kernel.LLM.MaxTokens,
+	)
+}
+
+func buildEmotion(cfg *config.Config) *emotion.Engine {
+	return emotion.New(cfg.Emotion, cfg.RAG.Redis.Addr, cfg.RAG.Redis.Password, cfg.RAG.Redis.DB)
+}
+
+func buildEmbedder(cfg *config.Config) memory.Embedder {
+	return memory.NewEmbedder(
+		cfg.RAG.Embedding.Provider,
+		cfg.RAG.Embedding.BaseURL,
+		cfg.RAG.Embedding.APIKey,
+		cfg.RAG.Embedding.Model,
+	)
+}
+
+// ragMinScore hash 兜底模式（未配 Key）下向量无语义精度，相似度普遍偏低；
+// 不做绝对过滤，仅靠 topK 排序截断，保证开发链路可测
+func ragMinScore(cfg *config.Config) float64 {
+	if _, isHash := buildEmbedder(cfg).(*memory.HashEmbedder); isHash {
+		return 0
+	}
+	return cfg.RAG.Retrieval.MinScore
+}
+
+func buildRAG(cfg *config.Config) *memory.RAG {
+	return memory.NewRAG(
+		cfg.RAG.Redis.Addr,
+		cfg.RAG.Redis.Password,
+		cfg.RAG.Redis.DB,
+		buildEmbedder(cfg),
+		cfg.RAG.Retrieval.TopK,
+		ragMinScore(cfg),
+	)
 }
 
 // OnProactive 注册主动推送回调（server 层广播用）

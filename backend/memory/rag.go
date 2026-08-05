@@ -164,5 +164,12 @@ func (r *RAG) Count(ctx context.Context) (int64, error) {
 // EmbedderName 返回当前 Embedding 名称
 func (r *RAG) EmbedderName() string { return r.embedder.Name() }
 
+// Reconfigure 热重载：替换 Embedding / 检索参数（Redis 连接与数据保留）
+func (r *RAG) Reconfigure(embedder Embedder, topK int, minScore float64) {
+	r.embedder = embedder
+	r.topK = topK
+	r.minScore = minScore
+}
+
 // Close 关闭连接
 func (r *RAG) Close() error { return r.rdb.Close() }

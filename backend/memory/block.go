@@ -102,6 +102,14 @@ func (b *Block) Len() int {
 	return len(b.entries)
 }
 
+// SetMaxEntries 热重载：调整容量上限（变小立即截断）
+func (b *Block) SetMaxEntries(max int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.maxEntries = max
+	b.trim()
+}
+
 // Clear 清空（仅测试用；前端不可删）
 func (b *Block) Clear() {
 	b.mu.Lock()

@@ -37,6 +37,12 @@ func main() {
 	log.Printf("Alice 启动 | LLM: %s | Embedding: %s", cfg.Kernel.LLM.Provider, cfg.RAG.Embedding.Model)
 
 	k := kernel.NewKernel(cfg)
+
+	// 配置文件热重载（改配置无需重启）
+	config.Watch(absDir, func(newCfg *config.Config) {
+		k.Reload(newCfg)
+	})
+
 	hub := server.NewHub()
 
 	// 主动推送：情绪超阈值时广播给所有连接
