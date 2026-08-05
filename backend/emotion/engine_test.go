@@ -19,12 +19,13 @@ func testConfig() *config.EmotionConfig {
 		DecayRate: 0.01,
 		MaxValue:  1.0,
 		Proactive: struct {
-			Enabled        bool    `yaml:"enabled"`
-			Threshold      float64 `yaml:"threshold"`
-			CooldownSec    int     `yaml:"cooldown_seconds"`
-			TickSec        int     `yaml:"tick_seconds"`
-			SilentAfterMin int     `yaml:"silent_after_minutes"`
-			Hours          []int   `yaml:"hours"`
+			Enabled         bool    `yaml:"enabled"`
+			Threshold       float64 `yaml:"threshold"`
+			CooldownSec     int     `yaml:"cooldown_seconds"`
+			TickSec         int     `yaml:"tick_seconds"`
+			SilentAfterMin  int     `yaml:"silent_after_minutes"`
+			SkipIfActiveMin int     `yaml:"skip_if_active_minutes"`
+			Hours           []int   `yaml:"hours"`
 		}{Enabled: true, Threshold: 0.7, CooldownSec: 600, TickSec: 1},
 		Persistence: struct {
 			Enabled bool `yaml:"enabled"`

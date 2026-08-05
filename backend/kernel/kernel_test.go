@@ -125,3 +125,30 @@ func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
+
+// TestUserActiveRecently 启动即活跃（lastActive 已初始化），用户聊天时跳过主动推送
+func TestUserActiveRecently(t *testing.T) {
+	cfg, err := config.Load("../../config")
+	if err != nil {
+		t.Fatalf("加载配置失败: %v", err)
+	}
+	if cfg.Emotion.Proactive.SkipIfActiveMin <= 0 {
+		t.Skip("skip_if_active_minutes 未配置，跳过")
+	}
+
+	k := NewKernel(cfg)
+	defer k.mcp.Stop("local")
+
+	// 刚启动（lastActive 初始化为 now），应判定为"用户活跃中"
+	if !k.userActiveRecently() {
+		t.Fatal("刚启动应判定为活跃，主动推送应被跳过")
+	}
+
+	// 模拟长时间无互动
+	k.silentMu.Lock()
+	k.lastActive = time.Now().Add(-time.Hour)
+	k.silentMu.Unlock()
+	if k.userActiveRecently() {
+		t.Fatal("1 小时无互动不应判定为活跃")
+	}
+}

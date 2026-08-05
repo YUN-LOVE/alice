@@ -8,6 +8,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   streaming?: boolean
+  time?: number // 毫秒时间戳
 }
 
 // 非组件上下文使用 Pinia：全局单一实例
@@ -107,6 +108,7 @@ export const useChatStore = defineStore('chat', {
           id: historyIdBase + i,
           role: m.role === 'assistant' ? 'assistant' : 'user',
           content: m.content,
+          time: m.create_at * 1000,
         }))
         msgId = historyIdBase + data.messages.length
       } catch {
@@ -123,8 +125,9 @@ export const useChatStore = defineStore('chat', {
 
     sendText(text: string) {
       if (!text.trim() || this.sending) return
-      this.messages.push({ id: ++msgId, role: 'user', content: text })
-      this.messages.push({ id: ++msgId, role: 'assistant', content: '', streaming: true })
+      const now = Date.now()
+      this.messages.push({ id: ++msgId, role: 'user', content: text, time: now })
+      this.messages.push({ id: ++msgId, role: 'assistant', content: '', streaming: true, time: now })
       this.sending = true
       ws.send('user_message', { text })
     },
@@ -135,13 +138,14 @@ export const useChatStore = defineStore('chat', {
         if (p.content) last.content += p.content
         if (p.done) {
           last.streaming = false
+          last.time = Date.now()
           this.sending = false
         }
       }
     },
 
     pushAssistant(text: string) {
-      this.messages.push({ id: ++msgId, role: 'assistant', content: text })
+      this.messages.push({ id: ++msgId, role: 'assistant', content: text, time: Date.now() })
       this.sending = false
     },
 

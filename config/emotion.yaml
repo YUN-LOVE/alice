@@ -53,6 +53,8 @@ emotion:
     tick_seconds: 1
     # 用户长时间无互动触发主动关心（分钟，0=关闭）
     silent_after_minutes: 30
+    # 用户最近互动过则跳过主动推送（分钟，0=不跳过）——聊天中不打扰
+    skip_if_active_minutes: 10
     # 允许主动推送的小时段 [起, 止]，空=不限
     hours: [8, 23]
 

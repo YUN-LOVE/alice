@@ -72,6 +72,7 @@ type EmotionConfig struct {
 		CooldownSec      int     `yaml:"cooldown_seconds"`
 		TickSec          int     `yaml:"tick_seconds"`
 		SilentAfterMin   int     `yaml:"silent_after_minutes"` // 用户长时间无互动触发主动关心，0=关闭
+		SkipIfActiveMin  int     `yaml:"skip_if_active_minutes"` // 用户最近互动过则跳过主动推送，0=不跳过
 		Hours            []int   `yaml:"hours"`                // 允许主动推送的小时段 [起, 止]，空=不限
 	} `yaml:"proactive"`
 	Persistence struct {

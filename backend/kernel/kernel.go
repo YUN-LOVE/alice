@@ -56,6 +56,8 @@ func NewKernel(cfg *config.Config) *Kernel {
 		block:  memory.NewBlock(cfg.Block.MaxEntries),
 		engine: buildEmotion(cfg),
 		mcp:    mcp.NewManager(cfg.MCP.AutoStart, cfg.RAG.Redis.Addr, cfg.RAG.Redis.Password, cfg.RAG.Redis.DB),
+		// 初始化活跃时间，避免启动时零值被误判为"长时间无互动"
+		lastActive: time.Now(),
 	}
 
 	// 加载 MCP 市场注册表（本地文件或远程 URL）
@@ -232,10 +234,24 @@ func (k *Kernel) startEmotionTicker() {
 			k.engine.Tick()
 			k.checkSilent()
 			if should, _ := k.engine.ShouldProactive(); should {
-				k.triggerProactive()
+				// 用户最近在聊天则不打扰（Alice 正在和你互动，不需要"想人"）
+				if !k.userActiveRecently() {
+					k.triggerProactive()
+				}
 			}
 		}
 	}()
+}
+
+// userActiveRecently 用户最近是否活跃过（活跃期跳过主动推送）
+func (k *Kernel) userActiveRecently() bool {
+	min := k.cfg.Emotion.Proactive.SkipIfActiveMin
+	if min <= 0 {
+		return false
+	}
+	k.silentMu.Lock()
+	defer k.silentMu.Unlock()
+	return time.Since(k.lastActive) < time.Duration(min)*time.Minute
 }
 
 // checkSilent 用户长时间无互动：触发 user_silent_long_time 事件（失落/焦虑上升）
