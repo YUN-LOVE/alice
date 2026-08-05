@@ -30,8 +30,9 @@
 cd backend
 go run .                  # 监听 :8081（端口在 config/main.yaml）
 
-# 内置 MCP Server（提供 calculator/time/echo 工具，需先编译一次）
+# 内置 MCP Server（需先编译一次）
 cd mcp-server && go build -o alice-local-tools . && cd ..
+cd mcp-vision && go build -o alice-vision-tools . && cd ..   # 视觉（需视觉模型 key）
 
 # 前端（Node 22+，包管理器用 pnpm）
 cd frontend
@@ -75,6 +76,13 @@ llm:
 
 MCP Server 在 `config/mcp.yaml` 的 `servers` 列表注册（`command` 可为本地二进制或 `npx` 启动的任意现成 MCP Server），后端启动时自动拉起。
 
+**视觉能力**（`mcp-vision/`）：工具 `describe_image`（本地图片）/ `describe_image_url`（网络图片），由视觉模型描述。配置环境变量（密钥不进仓库）：
+
+```bash
+export ALICE_VISION_API_KEY=sk-xxx          # 硅基流动等 OpenAI 兼容视觉模型 key
+export ALICE_VISION_MODEL=Qwen/Qwen2.5-VL-72B-Instruct   # 可选，默认如上
+```
+
 ```
 config/
 ├── main.yaml              # 服务端口、日志
@@ -98,6 +106,7 @@ config/
 | 阶段二 | 记忆系统：Memory Block（去重/容量）+ RAG（Embedding + Redis 检索 + 落库） | ✅ 完成 |
 | 阶段三 | 情绪引擎：高维向量、事件驱动、时间衰减、主动推送、持久化 | ✅ 完成 |
 | 阶段四 | MCP 层：stdio 协议客户端、生命周期管理、Function Calling 循环、内置工具 | ✅ 完成 |
+| 阶段四+ | Vision：视觉 MCP Server（describe_image，帮 Alice "看"图片） | ✅ 完成 |
 | 阶段五 | 前端补全：设置面板、MCP 市场、情绪可视化、主题切换 | ⏳ 规划中 |
 
 ## 目录结构

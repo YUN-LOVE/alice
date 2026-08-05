@@ -264,18 +264,32 @@ func decideMockToolCall(messages []ChatMessage, tools []Tool) *ToolCall {
 		switch {
 		case strings.Contains(lastUser, "计算") && t.Function.Name == "local__calculator":
 			return &ToolCall{ID: "call_mock_calc", Name: t.Function.Name, Arguments: mockExpression(lastUser)}
-		case strings.Contains(lastUser, "时间") && t.Function.Name == "local__get_time":
+		case (strings.Contains(lastUser, "时间") || strings.Contains(lastUser, "几点")) && t.Function.Name == "local__get_time":
 			return &ToolCall{ID: "call_mock_time", Name: t.Function.Name, Arguments: "{}"}
+		case (strings.Contains(lastUser, "图片") || strings.Contains(lastUser, "看看")) && t.Function.Name == "vision__describe_image":
+			path := mockImagePath(lastUser)
+			return &ToolCall{ID: "call_mock_vision", Name: t.Function.Name, Arguments: `{"path":"` + path + `"}`}
 		}
 	}
 	return nil
 }
 
-// mockExpression 从"计算 xxx"中提取表达式
+// mockImagePath 从消息中提取图片路径，找不到则用默认测试路径
+func mockImagePath(text string) string {
+	fields := strings.Fields(text)
+	for _, f := range fields {
+		if strings.HasPrefix(f, "/") || strings.HasPrefix(f, "~") {
+			return strings.TrimRight(f, "。,.，,!")
+		}
+	}
+	return "/tmp/opencode/test.png"
+}
+
+// mockExpression 从"计算 xxx"中提取表达式（按字节安全切片）
 func mockExpression(text string) string {
 	idx := strings.Index(text, "计算")
 	if idx >= 0 {
-		if expr := strings.TrimSpace(text[idx+2:]); expr != "" {
+		if expr := strings.TrimSpace(text[idx+len("计算"):]); expr != "" {
 			return `{"expression":"` + expr + `"}`
 		}
 	}

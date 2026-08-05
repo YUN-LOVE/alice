@@ -5,6 +5,8 @@ import (
 	"log"
 	"strings"
 	"sync"
+
+	"alice/config"
 )
 
 // ManagedServer 一个已安装的 MCP Server 实例
@@ -52,6 +54,30 @@ func (m *Manager) Add(id, name, command string, args, env []string, enabled bool
 	m.servers[id] = &ManagedServer{
 		ID: id, Name: name, Command: command, Args: args, Env: env,
 	}
+}
+
+// Reload 热重载：按新配置整体重建（停止旧 Server，按新配置重新启动）
+func (m *Manager) Reload(ctx context.Context, servers []config.MCPServerConfig) {
+	m.mu.Lock()
+	ids := make([]string, 0, len(m.servers))
+	for id := range m.servers {
+		ids = append(ids, id)
+	}
+	m.mu.Unlock()
+
+	for _, id := range ids {
+		m.Stop(id)
+	}
+
+	m.mu.Lock()
+	m.servers = make(map[string]*ManagedServer)
+	m.mu.Unlock()
+
+	for _, s := range servers {
+		m.Add(s.ID, s.Name, s.Command, s.Args, s.Env, s.Enabled)
+	}
+	m.StartAll(ctx)
+	log.Printf("[mcp] 配置热重载完成，共 %d 个 Server", len(servers))
 }
 
 // StartAll 启动所有已启用的 Server

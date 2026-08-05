@@ -75,9 +75,12 @@ func resolveMCPCommand(configDir, command string) string {
 	return abs
 }
 
-// Reload 配置热重载：更新 LLM / 情绪引擎 / RAG 检索参数 / Memory Block 容量
+// Reload 配置热重载：更新 LLM / 情绪引擎 / RAG 检索参数 / Memory Block 容量 / MCP Server
 // 保留 Redis 连接与已存记忆；短期工作记忆内容保留（仅调整容量）
 func (k *Kernel) Reload(cfg *config.Config) {
+	// MCP 配置变更时热重载（需在更新 k.cfg 前比较新旧配置）
+	k.reloadMCP(k.cfg.MCP, cfg.MCP, cfg.BaseDir)
+
 	k.cfg = cfg
 	k.llm = buildLLM(cfg)
 	k.engine = buildEmotion(cfg)
@@ -87,7 +90,38 @@ func (k *Kernel) Reload(cfg *config.Config) {
 		ragMinScore(cfg),
 	)
 	k.block.SetMaxEntries(cfg.Block.MaxEntries)
+
 	log.Printf("[kernel] 配置已热重载 | LLM: %s | 情绪恢复: %v", k.llm.Name(), k.engine.State())
+}
+
+// reloadMCP 仅当 MCP 配置变化时重建 Manager
+func (k *Kernel) reloadMCP(old, cur *config.MCPConfig, baseDir string) {
+	if mcpConfigEqual(old.Servers, cur.Servers) {
+		return
+	}
+	servers := make([]config.MCPServerConfig, len(cur.Servers))
+	for i, s := range cur.Servers {
+		s2 := s
+		s2.Command = resolveMCPCommand(baseDir, s.Command)
+		servers[i] = s2
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	k.mcp.Reload(ctx, servers)
+}
+
+// mcpConfigEqual 比较两份 MCP Server 配置是否相同
+func mcpConfigEqual(a, b []config.MCPServerConfig) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].ID != b[i].ID || a[i].Command != b[i].Command ||
+			a[i].Name != b[i].Name || a[i].Enabled != b[i].Enabled {
+			return false
+		}
+	}
+	return true
 }
 
 func buildLLM(cfg *config.Config) LLMClient {

@@ -14,5 +14,12 @@ mcp:
       env: []
       enabled: true
 
+    - id: "vision"
+      name: "视觉"
+      command: "../mcp-vision/alice-vision-tools"
+      args: []
+      env: []
+      enabled: true
+
   # 启动时自动拉起已启用的 MCP
   auto_start: true
