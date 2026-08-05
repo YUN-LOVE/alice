@@ -25,19 +25,38 @@
 
 ## 快速开始
 
+### 0. 依赖
+
+- **Redis**（必需：记忆 / 情绪 / 历史 / MCP 开关都依赖）
+
 ```bash
-# 后端（Go 1.22+）
-cd backend
-go run .                  # 监听 :8081（端口在 config/main.yaml）
+# 安装（任选其一）
+sudo pacman -S redis        # Arch
+sudo apt install redis-server  # Debian/Ubuntu
 
-# 内置 MCP Server（需先编译一次）
-cd mcp-server && go build -o alice-local-tools . && cd ..
-cd mcp-vision && go build -o alice-vision-tools . && cd ..   # 视觉（需视觉模型 key）
+# 启动
+redis-server --daemonize yes --port 6379
+redis-cli ping               # 应返回 PONG
+```
 
-# 前端（Node 22+，包管理器用 pnpm）
-cd frontend
-pnpm install
-pnpm dev                  # http://localhost:4321（监听 0.0.0.0，局域网可访问）
+- **Node 22+**（前端，包管理器用 pnpm）、**Go 1.22+**（后端）
+
+### 1. 构建内置 MCP Server + 后端
+
+```bash
+# 在项目根目录
+make mcp        # 编译 mcp-server/alice-local-tools 与 mcp-vision/alice-vision-tools
+make backend    # 编译 backend/alice-server
+```
+
+### 2. 启动
+
+```bash
+# 后端
+cd backend && go run .     # 或 ./alice-server（make backend 产物），监听 :8081
+
+# 前端
+cd frontend && pnpm dev    # http://localhost:4321（监听 0.0.0.0，局域网可访问）
 ```
 
 打开 `http://localhost:4321` 即可聊天。

@@ -3,3 +3,4 @@
 
 # Go 构建产物
 *.exe
+backend/alice-server
