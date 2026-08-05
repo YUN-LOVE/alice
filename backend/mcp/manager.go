@@ -5,20 +5,24 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"alice/config"
 )
 
 // ManagedServer 一个已安装的 MCP Server 实例
 type ManagedServer struct {
-	ID      string
-	Name    string
-	Command string
-	Args    []string
-	Env     []string
+	ID        string
+	Name      string
+	Transport string // "stdio" / "http"
+	Command   string
+	Args      []string
+	Env       []string
+	URL       string
+	Headers   map[string]string
 
 	mu      sync.Mutex
-	client  *Client
+	conn    MCPConn
 	tools   []Tool
 	running bool
 }
@@ -48,11 +52,17 @@ func NewManager(autoStart bool) *Manager {
 }
 
 // Add 注册一个已配置的 Server
-func (m *Manager) Add(id, name, command string, args, env []string, enabled bool) {
+func (m *Manager) Add(id, name string, cfg config.MCPServerConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.servers[id] = &ManagedServer{
-		ID: id, Name: name, Command: command, Args: args, Env: env,
+		ID: id, Name: name,
+		Transport: cfg.Transport,
+		Command:   cfg.Command,
+		Args:      cfg.Args,
+		Env:       cfg.Env,
+		URL:       cfg.URL,
+		Headers:   cfg.Headers,
 	}
 }
 
@@ -74,7 +84,7 @@ func (m *Manager) Reload(ctx context.Context, servers []config.MCPServerConfig) 
 	m.mu.Unlock()
 
 	for _, s := range servers {
-		m.Add(s.ID, s.Name, s.Command, s.Args, s.Env, s.Enabled)
+		m.Add(s.ID, s.Name, s)
 	}
 	m.StartAll(ctx)
 	log.Printf("[mcp] 配置热重载完成，共 %d 个 Server", len(servers))
@@ -116,12 +126,23 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 		return nil
 	}
 
-	c := &Client{}
-	if err := c.Start(ctx, ClientConfig{Command: s.Command, Args: s.Args, Env: s.Env}); err != nil {
+	var conn MCPConn
+	cfg := ClientConfig{Timeout: 10 * time.Second}
+	if s.Transport == "http" {
+		conn = &HTTPClient{}
+		cfg.URL = s.URL
+		cfg.Headers = s.Headers
+	} else {
+		conn = &Client{}
+		cfg.Command = s.Command
+		cfg.Args = s.Args
+		cfg.Env = s.Env
+	}
+	if err := conn.Start(ctx, cfg); err != nil {
 		return err
 	}
-	s.client = c
-	s.tools = c.Tools()
+	s.conn = conn
+	s.tools = conn.Tools()
 	s.running = true
 	return nil
 }
@@ -136,11 +157,11 @@ func (m *Manager) Stop(id string) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.running && s.client != nil {
-		s.client.Close()
+	if s.running && s.conn != nil {
+		s.conn.Close()
 	}
 	s.running = false
-	s.client = nil
+	s.conn = nil
 	s.tools = nil
 }
 
@@ -178,10 +199,10 @@ func (m *Manager) Call(ctx context.Context, fullName string, args map[string]any
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.running || s.client == nil {
+	if !s.running || s.conn == nil {
 		return "", errServerNotRunning(srvID)
 	}
-	res, err := s.client.Call(ctx, toolName, args)
+	res, err := s.conn.Call(ctx, toolName, args)
 	if err != nil {
 		return "", err
 	}

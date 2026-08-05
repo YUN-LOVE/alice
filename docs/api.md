@@ -91,6 +91,8 @@ HTTP API:      http://host:port/api/v1/...
 | `/api/v1/memory/search` | POST | 搜索 RAG 历史（body: `{"query": "..."}`） | ✅ 已实现 |
 | `/api/v1/memory/export` | GET | 导出所有记忆（JSON 下载） | ✅ 已实现 |
 | `/api/v1/mcp/status` | GET | 已安装 MCP Server 状态 | ✅ 已实现 |
+| `/api/v1/history` | GET | 当天聊天记录（`?date=YYYY-MM-DD` 可选） | ✅ 已实现 |
+| `/api/v1/history/dates` | GET | 已归档日期列表 | ✅ 已实现 |
 
 ### `GET /api/v1/health`
 

@@ -1,6 +1,7 @@
 import { defineStore, createPinia, setActivePinia } from 'pinia'
 import { ws } from '../services/ws'
 import { ensureConfig, getBackendUrl, setBackendUrl, wsUrl, httpBase } from '../services/backend'
+import { getHistory } from '../services/api'
 
 export interface ChatMessage {
   id: number
@@ -94,6 +95,23 @@ export const useChatStore = defineStore('chat', {
         this.backendUrl = getBackendUrl()
       }
       ws.connect(wsUrl())
+    },
+
+    /** 加载当天历史聊天记录（零点后归档到 RAG，前端只展示当天） */
+    async loadHistory() {
+      try {
+        const data = await getHistory()
+        if (!data.messages.length) return
+        const historyIdBase = 100000
+        this.messages = data.messages.map((m, i) => ({
+          id: historyIdBase + i,
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.content,
+        }))
+        msgId = historyIdBase + data.messages.length
+      } catch {
+        // 后端不可用时静默
+      }
     },
 
     /** 更换后端地址并重连 */

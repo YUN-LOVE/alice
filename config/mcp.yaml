@@ -21,5 +21,14 @@ mcp:
       env: []
       enabled: true
 
+  # 远程 MCP（HTTP/SSE 方式接入第三方 MCP Server）示例：
+  # - id: "remote-search"
+  #   name: "远程搜索"
+  #   transport: "http"
+  #   url: "https://mcp.example.com/search"
+  #   headers:
+  #     Authorization: "Bearer xxx"
+  #   enabled: true
+
   # 启动时自动拉起已启用的 MCP
   auto_start: true

@@ -57,3 +57,15 @@ export function getMCPStatus(): Promise<{ servers: MCServerStatus[] }> {
 export function getHealth(): Promise<{ status: string; llm: string; embedding: string; memory: number }> {
   return request('/health')
 }
+
+export interface HistoryMessage {
+  role: string
+  content: string
+  create_at: number
+}
+
+/** 当天聊天记录（历史，零点后归档到 RAG，只显示当天） */
+export function getHistory(date?: string): Promise<{ date: string; messages: HistoryMessage[] }> {
+  const q = date ? `?date=${date}` : ''
+  return request(`/history${q}`)
+}

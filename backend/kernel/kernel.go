@@ -54,13 +54,42 @@ func NewKernel(cfg *config.Config) *Kernel {
 
 	// 注册已配置的 MCP Server
 	for _, s := range cfg.MCP.Servers {
-		k.mcp.Add(s.ID, s.Name, resolveMCPCommand(cfg.BaseDir, s.Command), s.Args, s.Env, s.Enabled)
+		s2 := s
+		if s2.Transport == "" {
+			s2.Transport = "stdio"
+		}
+		s2.Command = resolveMCPCommand(cfg.BaseDir, s.Command)
+		k.mcp.Add(s2.ID, s2.Name, s2)
 	}
 	// 启动已启用的 MCP Server（超时由 Client 内部控制）
 	k.mcp.StartAll(context.Background())
 
 	k.startEmotionTicker()
+	k.startArchiveTicker()
 	return k
+}
+
+// startArchiveTicker 每日零点整理：确认昨日对话已按日期归档（打 tag 存 RAG）
+// 存储时已按日期打 tag，这里负责跨天边界确认与记录
+func (k *Kernel) startArchiveTicker() {
+	go func() {
+		for {
+			now := time.Now()
+			// 下一个零点
+			next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 1, 0, now.Location())
+			time.Sleep(time.Until(next))
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			yes := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+			n, err := k.rag.CountByDate(ctx, yes)
+			cancel()
+			if err != nil {
+				log.Printf("[archive] 零点整理失败: %v", err)
+			} else {
+				log.Printf("[archive] 零点整理完成：%s 共 %d 条对话已归档为长期记忆", yes, n)
+			}
+		}
+	}()
 }
 
 // resolveMCPCommand 相对路径基于配置目录解析（避免受进程工作目录影响）
@@ -102,6 +131,9 @@ func (k *Kernel) reloadMCP(old, cur *config.MCPConfig, baseDir string) {
 	servers := make([]config.MCPServerConfig, len(cur.Servers))
 	for i, s := range cur.Servers {
 		s2 := s
+		if s2.Transport == "" {
+			s2.Transport = "stdio"
+		}
 		s2.Command = resolveMCPCommand(baseDir, s.Command)
 		servers[i] = s2
 	}
@@ -409,17 +441,18 @@ func (k *Kernel) buildMessages(userText string) []ChatMessage {
 	return messages
 }
 
-// store 回复完成后：本轮对话全量存入 RAG + 回复注入 Block
+// store 回复完成后：本轮对话全量存入 RAG（按日期归档） + 回复注入 Block
 func (k *Kernel) store(ctx context.Context, userText, reply string) {
-	meta := map[string]any{"time": time.Now().Unix()}
+	today := time.Now().Format("2006-01-02")
+	meta := map[string]any{"time": time.Now().Unix(), "date": today}
 
 	if _, err := k.rag.Store(ctx, "user", userText, meta); err != nil {
 		log.Printf("[kernel] 存储用户消息失败: %v", err)
 	}
-	if _, err := k.rag.Store(ctx, "assistant", reply, meta); err != nil {
-		log.Printf("[kernel] 存储回复失败: %v", err)
-	}
 	if reply != "" {
+		if _, err := k.rag.Store(ctx, "assistant", reply, meta); err != nil {
+			log.Printf("[kernel] 存储回复失败: %v", err)
+		}
 		k.block.InjectIfAbsent(reply, "assistant", "conversation")
 	}
 
@@ -430,6 +463,26 @@ func (k *Kernel) store(ctx context.Context, userText, reply string) {
 		log.Printf("[emotion] 持久化失败: %v", err)
 	}
 }
+
+// History 返回某日期的聊天记录（按时间升序），并注入 Memory Block 保证上下文连续
+func (k *Kernel) History(ctx context.Context, date string) ([]memory.Mem, error) {
+	mems, err := k.rag.RetrieveByDate(ctx, date)
+	if err != nil {
+		return nil, err
+	}
+	// 注入短期工作记忆（去重，Alice 记得当天聊过什么）
+	entries := make([]memory.Entry, 0, len(mems))
+	for _, m := range mems {
+		entries = append(entries, memory.Entry{Role: m.Role, Text: m.Text, Source: "conversation"})
+	}
+	if n := k.block.Inject(entries); n > 0 {
+		log.Printf("[kernel] 历史加载注入 Block %d 条（当前共 %d 条）", n, k.block.Len())
+	}
+	return mems, nil
+}
+
+// MemoryDates 返回已归档的日期列表
+func (k *Kernel) MemoryDates(ctx context.Context) ([]string, error) { return k.rag.Dates(ctx) }
 
 // roundMap 情绪向量取整，便于日志输出
 func roundMap(m map[string]float64) map[string]float64 {

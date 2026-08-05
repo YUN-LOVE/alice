@@ -26,6 +26,7 @@ function openPanel(tab: 'memory' | 'mcp' | 'emotion') {
 
 onMounted(() => {
   void chat.connect()
+  void chat.loadHistory() // 加载当天历史聊天记录
   void mcp.refresh() // 状态栏显示 MCP 数量
   // 新消息时自动滚到底
   unwatch = chat.$subscribe(() => {

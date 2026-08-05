@@ -74,7 +74,10 @@ llm:
 
 所有可调参数集中在 [`config/`](config/)，不改代码。**配置文件支持热重载**：修改后约 1 秒内自动生效（LLM 参数、System Prompt、情绪引擎、记忆容量等），无需重启后端。
 
-MCP Server 在 `config/mcp.yaml` 的 `servers` 列表注册（`command` 可为本地二进制或 `npx` 启动的任意现成 MCP Server），后端启动时自动拉起。
+MCP Server 在 `config/mcp.yaml` 的 `servers` 列表注册，后端启动时自动拉起。支持两种接入方式：
+
+- **stdio**：本地二进制或 `npx` 启动（默认）
+- **http**：远程 MCP Server 通过 URL 接入（第三方 MCP 常见），配置 `transport: "http"` + `url` + 可选 `headers`（如 `Authorization`）
 
 **视觉能力**（`mcp-vision/`）：工具 `describe_image`（本地图片）/ `describe_image_url`（网络图片），由视觉模型描述。配置环境变量（密钥不进仓库）：
 
@@ -82,6 +85,10 @@ MCP Server 在 `config/mcp.yaml` 的 `servers` 列表注册（`command` 可为�
 export ALICE_VISION_API_KEY=sk-xxx          # 硅基流动等 OpenAI 兼容视觉模型 key
 export ALICE_VISION_MODEL=Qwen/Qwen2.5-VL-72B-Instruct   # 可选，默认如上
 ```
+
+## 历史聊天记录
+
+每轮对话按时间戳存入 RAG 并打**日期 tag**。前端页面加载时显示**当天的聊天记录**；每天零点自动整理归档（前一天对话归入长期记忆）。没有会话概念——Alice 只有全局一份记忆，私人部署，任何端看到的都是同一份。
 
 ```
 config/

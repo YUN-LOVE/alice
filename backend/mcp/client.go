@@ -26,12 +26,24 @@ type Client struct {
 	tools      []Tool
 }
 
+// MCPConn 统一连接接口（stdio 子进程 / HTTP 远程均可）
+type MCPConn interface {
+	Start(ctx context.Context, cfg ClientConfig) error
+	Tools() []Tool
+	ServerInfo() ServerInfo
+	Call(ctx context.Context, name string, args map[string]any) (*CallResult, error)
+	Close()
+}
+
 // ClientConfig 启动参数
 type ClientConfig struct {
-	Command string   // 如 "npx" 或本地二进制
-	Args    []string
-	Env     []string // "KEY=VALUE" 形式
-	Timeout time.Duration
+	Transport string            // "stdio"（默认） / "http"
+	Command   string            // stdio：启动命令（如 "npx" 或本地二进制）
+	Args      []string          // stdio
+	Env       []string          // stdio："KEY=VALUE" 形式
+	URL       string            // http：MCP 端点地址
+	Headers   map[string]string // http：附加请求头
+	Timeout   time.Duration
 }
 
 // Start 启动子进程并完成 MCP 握手（initialize）

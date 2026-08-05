@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"alice/kernel"
 )
@@ -70,6 +71,38 @@ func RegisterRoutes(mux *http.ServeMux, k *kernel.Kernel) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="alice-memory.json"`)
 		_ = json.NewEncoder(w).Encode(map[string]any{"total": len(mems), "memories": mems})
+	})
+
+	// 历史聊天记录：按日期返回当天对话（每天零点整理归档，之前的日子在 RAG 中）
+	mux.HandleFunc("GET /api/v1/history", func(w http.ResponseWriter, r *http.Request) {
+		date := r.URL.Query().Get("date")
+		if date == "" {
+			date = time.Now().Format("2006-01-02")
+		}
+		mems, err := k.History(r.Context(), date)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "加载历史失败: " + err.Error()})
+			return
+		}
+		messages := make([]map[string]any, 0, len(mems))
+		for _, m := range mems {
+			messages = append(messages, map[string]any{
+				"role":      m.Role,
+				"content":   m.Text,
+				"create_at": m.CreateAt.Unix(),
+			})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"date": date, "messages": messages})
+	})
+
+	// 已归档日期列表（前端可选展示）
+	mux.HandleFunc("GET /api/v1/history/dates", func(w http.ResponseWriter, r *http.Request) {
+		dates, err := k.MemoryDates(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "获取日期失败: " + err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"dates": dates})
 	})
 
 	// MCP Server 状态

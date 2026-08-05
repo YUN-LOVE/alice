@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"alice/config"
 )
 
 // buildLocalTools 编译内置测试 MCP Server 到临时目录
@@ -71,7 +73,10 @@ func TestManagerCall(t *testing.T) {
 	defer cancel()
 
 	m := NewManager(true)
-	m.Add("local", "本地工具", bin, nil, nil, true)
+	m.Add("local", "本地工具", config.MCPServerConfig{
+		Command: bin,
+		Enabled: true,
+	})
 	m.StartAll(ctx)
 
 	tools := m.Tools()

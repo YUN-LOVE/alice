@@ -104,12 +104,15 @@ type BlockConfig struct {
 
 // MCPServerConfig 已安装的 MCP Server 定义
 type MCPServerConfig struct {
-	ID      string   `yaml:"id"`
-	Name    string   `yaml:"name"`
-	Command string   `yaml:"command"` // 启动命令（可执行文件或 npx）
-	Args    []string `yaml:"args"`
-	Env     []string `yaml:"env"` // "KEY=VALUE"
-	Enabled bool     `yaml:"enabled"`
+	ID        string            `yaml:"id"`
+	Name      string            `yaml:"name"`
+	Transport string            `yaml:"transport"` // "stdio"（默认）/ "http"
+	Command   string            `yaml:"command"`   // stdio：启动命令（可执行文件或 npx）
+	Args      []string          `yaml:"args"`
+	Env       []string          `yaml:"env"` // "KEY=VALUE"
+	URL       string            `yaml:"url"` // http：MCP 端点地址
+	Headers   map[string]string `yaml:"headers"`
+	Enabled   bool              `yaml:"enabled"`
 }
 
 type MCPConfig struct {

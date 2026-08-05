@@ -102,3 +102,45 @@ func TestRAGRetrieve(t *testing.T) {
 		t.Fatalf("最相关记忆不匹配: %s", results[0].Mem.Text)
 	}
 }
+
+// 用真实 Redis 验证按日期归档与查询（未提供 REDIS_ADDR 时跳过）
+func TestRAGByDate(t *testing.T) {
+	addr := os.Getenv("REDIS_ADDR")
+	if addr == "" {
+		t.Skip("未设置 REDIS_ADDR，跳过 RAG 日期测试")
+	}
+
+	ctx := context.Background()
+	rag := NewRAG(addr, "", 14, &HashEmbedder{}, 5, 0)
+	defer rag.Close()
+
+	if _, err := rag.Store(ctx, "user", "第一天的对话", map[string]any{"date": "2026-08-01"}); err != nil {
+		t.Fatalf("存储失败: %v", err)
+	}
+	if _, err := rag.Store(ctx, "assistant", "第一天的回复", map[string]any{"date": "2026-08-01"}); err != nil {
+		t.Fatalf("存储失败: %v", err)
+	}
+	if _, err := rag.Store(ctx, "user", "第二天的对话", map[string]any{"date": "2026-08-02"}); err != nil {
+		t.Fatalf("存储失败: %v", err)
+	}
+
+	mems, err := rag.RetrieveByDate(ctx, "2026-08-01")
+	if err != nil {
+		t.Fatalf("按日期查询失败: %v", err)
+	}
+	if len(mems) != 2 {
+		t.Fatalf("2026-08-01 应有 2 条，实际 %d", len(mems))
+	}
+	if mems[0].Text != "第一天的对话" || mems[1].Text != "第一天的回复" {
+		t.Fatalf("日期查询顺序错误: %+v", mems)
+	}
+
+	if n, _ := rag.CountByDate(ctx, "2026-08-02"); n != 1 {
+		t.Fatalf("2026-08-02 应有 1 条，实际 %d", n)
+	}
+
+	dates, err := rag.Dates(ctx)
+	if err != nil || len(dates) == 0 {
+		t.Fatalf("日期列表错误: %v %v", dates, err)
+	}
+}
