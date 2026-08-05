@@ -34,7 +34,11 @@ HTTP API:      http://host:port/api/v1/...
 | `mcp_uninstall` | `{...}` | 卸载 MCP | 🚧 规划中 |
 | `mcp_toggle` | `{...}` | 启用/禁用 MCP | 🚧 规划中 |
 | `mcp_configure` | `{...}` | 修改 MCP 配置 | 🚧 规划中 |
-| `mcp_installed_list` | — | 获取已安装列表 | 🚧 规划中 |
+| `mcp_installed_list` | — | 获取已安装 MCP 列表 | ✅ 已实现 |
+| `mcp_toggle` | `{ "id": "serverId", "enabled": true/false }` | 启用/禁用 MCP | ✅ 已实现 |
+| `mcp_install` | `{...}` | 安装 MCP | 🚧 规划中 |
+| `mcp_uninstall` | `{...}` | 卸载 MCP | 🚧 规划中 |
+| `mcp_configure` | `{...}` | 修改 MCP 配置 | 🚧 规划中 |
 
 ### 1.2 后端 → 前端
 
@@ -49,7 +53,9 @@ HTTP API:      http://host:port/api/v1/...
 | `emotion_update` | `{ "state", "description", "top" }` | 情绪状态更新（回复结束时推送） | ✅ 已实现 |
 | `mcp_capabilities` | `{...}` | MCP 能力更新 | 🚧 规划中 |
 | `settings_update_ack` | `{...}` | 配置修改确认 | 🚧 规划中 |
-| `mcp_*_ack` | `{...}` | MCP 操作确认 | 🚧 规划中 |
+| `mcp_installed_list_ack` | `{ "servers": [...] }` | 已安装列表确认 | ✅ 已实现 |
+| `mcp_toggle_ack` | `{ "id", "ok", "enabled" }` | 启用/禁用确认 | ✅ 已实现 |
+| `mcp_*_ack` | `{...}` | MCP 操作确认 | ✅ 已实现 |
 
 ### 1.3 示例：完整对话流程
 
@@ -84,6 +90,7 @@ HTTP API:      http://host:port/api/v1/...
 | `/api/v1/memory/block/:id` | GET | 获取单条记忆详情 | ✅ 已实现 |
 | `/api/v1/memory/search` | POST | 搜索 RAG 历史（body: `{"query": "..."}`） | ✅ 已实现 |
 | `/api/v1/memory/export` | GET | 导出所有记忆（JSON 下载） | ✅ 已实现 |
+| `/api/v1/mcp/status` | GET | 已安装 MCP Server 状态 | ✅ 已实现 |
 
 ### `GET /api/v1/health`
 

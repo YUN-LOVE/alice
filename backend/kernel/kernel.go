@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -9,23 +10,26 @@ import (
 
 	"alice/config"
 	"alice/emotion"
+	"path/filepath"
+	"alice/mcp"
 	"alice/memory"
 )
 
 // Kernel 对话核心：
-// 阶段三链路 = Emotion 事件驱动 → RAG 检索 → Memory Block 增量注入 → 构建上下文（含情绪） → LLM → 存储
+// 阶段四链路 = Emotion → RAG 检索 → Memory Block 注入 → 构建上下文 → LLM（Function Calling 循环，经 MCP 调工具） → 存储
 //
 // 记忆模型：
 // - Memory Block：Alice 的短期工作记忆，全局共享（存 RAG 检索原文 + 近期对话，去重、只读）
 // - RAG：长期记忆，每轮对话全量存储，检索结果经 Block 注入上下文
 // - Emotion：高维情绪向量，事件驱动 + 时间衰减，注入回复风格，超阈值触发主动推送
-// - sessionID 保留在协议层（多端各自持有），阶段三记忆/情绪全局一致
+// - MCP：外设工具统一接入，LLM 通过 Function Calling 自动决策调用
 type Kernel struct {
-	cfg     *config.Config
-	llm     LLMClient
-	rag     *memory.RAG
-	block   *memory.Block
-	engine  *emotion.Engine
+	cfg         *config.Config
+	llm         LLMClient
+	rag         *memory.RAG
+	block       *memory.Block
+	engine      *emotion.Engine
+	mcp         *mcp.Manager
 	onProactive func(string)
 }
 
@@ -45,9 +49,30 @@ func NewKernel(cfg *config.Config) *Kernel {
 		rag:    rag,
 		block:  memory.NewBlock(cfg.Block.MaxEntries),
 		engine: buildEmotion(cfg),
+		mcp:    mcp.NewManager(cfg.MCP.AutoStart),
 	}
+
+	// 注册已配置的 MCP Server
+	for _, s := range cfg.MCP.Servers {
+		k.mcp.Add(s.ID, s.Name, resolveMCPCommand(cfg.BaseDir, s.Command), s.Args, s.Env, s.Enabled)
+	}
+	// 启动已启用的 MCP Server（超时由 Client 内部控制）
+	k.mcp.StartAll(context.Background())
+
 	k.startEmotionTicker()
 	return k
+}
+
+// resolveMCPCommand 相对路径基于配置目录解析（避免受进程工作目录影响）
+func resolveMCPCommand(configDir, command string) string {
+	if command == "" || filepath.IsAbs(command) {
+		return command
+	}
+	abs, err := filepath.Abs(filepath.Join(configDir, command))
+	if err != nil {
+		return command
+	}
+	return abs
 }
 
 // Reload 配置热重载：更新 LLM / 情绪引擎 / RAG 检索参数 / Memory Block 容量
@@ -153,29 +178,148 @@ func (k *Kernel) Process(ctx context.Context, sessionID, userText string) (<-cha
 	// [4] 构建上下文：System(含情绪) + Memory Block + 用户输入
 	messages := k.buildMessages(userText)
 
-	// [5] LLM 生成回复
-	ch, err := k.llm.ChatStream(ctx, messages, nil)
+	// [5] LLM 生成回复（Function Calling 循环，经 MCP 调用外设工具）
+	out, err := k.chatLoop(ctx, messages)
 	if err != nil {
 		return nil, err
 	}
+	return out, nil
+}
 
-	// [6] 流式转发 + 回复完成后存储
+// chatLoop Function Calling 循环：
+// LLM 流式输出 → 若含 tool_calls 则执行 MCP 工具 → 结果回传 → 再生成，直到返回纯文本
+func (k *Kernel) chatLoop(ctx context.Context, messages []ChatMessage) (<-chan StreamChunk, error) {
 	out := make(chan StreamChunk, 64)
+
 	go func() {
 		defer close(out)
-		var sb strings.Builder
-		for c := range ch {
-			if c.Content != "" {
-				sb.WriteString(c.Content)
+
+		for {
+			tools := mcpTools(k.mcp.Tools())
+			ch, err := k.llm.ChatStream(ctx, messages, tools)
+			if err != nil {
+				log.Printf("[kernel] LLM 调用失败: %v", err)
+				out <- StreamChunk{Done: true}
+				return
 			}
-			out <- c
-			if c.Done {
-				k.store(ctx, userText, sb.String())
+
+			// 聚合本轮输出（content + tool_calls 分片）
+			var contentSB strings.Builder
+			pending := map[int]ToolCall{}
+			for c := range ch {
+				if c.Content != "" {
+					contentSB.WriteString(c.Content)
+				}
+				for _, tc := range c.ToolCalls {
+					acc := pending[tc.Index]
+					if tc.ID != "" {
+						acc.ID = tc.ID
+					}
+					if tc.Name != "" {
+						acc.Name = tc.Name
+					}
+					acc.Arguments += tc.Arguments
+					acc.Index = tc.Index
+					pending[tc.Index] = acc
+				}
 			}
+
+			toolCalls := make([]ToolCall, 0, len(pending))
+			for i := 0; i < len(pending); i++ {
+				if acc, ok := pending[i]; ok {
+					toolCalls = append(toolCalls, acc)
+				}
+			}
+
+			// 无工具调用：本轮即为最终回复，转发内容
+			if len(toolCalls) == 0 {
+				content := contentSB.String()
+				for _, r := range []rune(content) {
+					select {
+					case <-ctx.Done():
+						return
+					case out <- StreamChunk{Content: string(r)}:
+					}
+				}
+				select {
+				case <-ctx.Done():
+				case out <- StreamChunk{Done: true}:
+				}
+				k.store(ctx, lastUserText(messages), content)
+				return
+			}
+
+			// 有工具调用：执行并回传
+			messages = append(messages, assistantToolMessage(toolCalls))
+			for _, tc := range toolCalls {
+				args := parseToolArgs(tc.Arguments)
+				result, err := k.mcp.Call(ctx, tc.Name, args)
+				if err != nil {
+					result = "工具调用失败: " + err.Error()
+				}
+				log.Printf("[mcp] 调用 %s → %s", tc.Name, truncateStr(result, 120))
+				messages = append(messages, ChatMessage{Role: "tool", ToolCallID: tc.ID, Content: result})
+			}
+			// 循环：带工具结果再生成
 		}
 	}()
 
 	return out, nil
+}
+
+// mcpTools MCP 工具 → LLM function schema
+func mcpTools(mcps []mcp.Tool) []Tool {
+	out := make([]Tool, 0, len(mcps))
+	for _, t := range mcps {
+		params := t.InputSchema
+		if params == nil {
+			params = map[string]any{"type": "object", "properties": map[string]any{}}
+		}
+		out = append(out, Tool{
+			Type: "function",
+			Function: ToolDefinition{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  params,
+			},
+		})
+	}
+	return out
+}
+
+// assistantToolMessage 构造 assistant 消息（携带 tool_calls，OpenAI 格式）
+func assistantToolMessage(toolCalls []ToolCall) ChatMessage {
+	calls := make([]any, 0, len(toolCalls))
+	for _, tc := range toolCalls {
+		calls = append(calls, map[string]any{
+			"id":   tc.ID,
+			"type": "function",
+			"function": map[string]any{
+				"name":      tc.Name,
+				"arguments": tc.Arguments,
+			},
+		})
+	}
+	return ChatMessage{Role: "assistant", Content: "", ToolCalls: calls}
+}
+
+// parseToolArgs 解析工具调用参数 JSON
+func parseToolArgs(args string) map[string]any {
+	var out map[string]any
+	if err := json.Unmarshal([]byte(args), &out); err != nil {
+		return map[string]any{}
+	}
+	return out
+}
+
+// lastUserText 获取 messages 中最后一条 user 消息（用于记忆存储）
+func lastUserText(messages []ChatMessage) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			return messages[i].Content
+		}
+	}
+	return ""
 }
 
 // retrieve 检索记忆；失败时降级返回空（对话不中断）
@@ -291,3 +435,14 @@ func (k *Kernel) LLMName() string { return k.llm.Name() }
 
 // EmbedderName 返回当前 Embedding 名称
 func (k *Kernel) EmbedderName() string { return k.rag.EmbedderName() }
+
+// MCP 相关：暴露给 server 层管理外设工具
+
+// MCPStatus 返回所有 MCP Server 状态
+func (k *Kernel) MCPStatus() []mcp.Status { return k.mcp.Status() }
+
+// MCPStart 启动指定 MCP Server
+func (k *Kernel) MCPStart(ctx context.Context, id string) error { return k.mcp.Start(ctx, id) }
+
+// MCPStop 停止指定 MCP Server
+func (k *Kernel) MCPStop(id string) { k.mcp.Stop(id) }

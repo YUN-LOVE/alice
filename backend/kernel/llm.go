@@ -12,8 +12,10 @@ import (
 
 // ChatMessage 对话消息
 type ChatMessage struct {
-	Role    string `json:"role"` // system / user / assistant / tool
-	Content string `json:"content"`
+	Role       string `json:"role"` // system / user / assistant / tool
+	Content    string `json:"content"`
+	ToolCallID string `json:"tool_call_id,omitempty"` // tool 消息关联的调用 ID
+	ToolCalls  []any  `json:"tool_calls,omitempty"`   // assistant 消息携带的工具调用（OpenAI 格式）
 }
 
 // Tool 工具定义（Function Calling 预留，阶段四启用）
@@ -28,11 +30,12 @@ type ToolDefinition struct {
 	Parameters  map[string]any `json:"parameters"`
 }
 
-// ToolCall LLM 请求调用的工具（阶段四启用）
+// ToolCall LLM 请求调用的工具
 type ToolCall struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+	Arguments string `json:"arguments"` // JSON 字符串，流式分片累积
+	Index     int    `json:"index"`     // 流式聚合用
 }
 
 // StreamChunk 流式回复片段
@@ -122,6 +125,7 @@ type sseLine struct {
 		Delta struct {
 			Content string `json:"content"`
 			ToolCalls []struct {
+				Index    int    `json:"index"`
 				ID       string `json:"id"`
 				Function struct {
 					Name      string `json:"name"`
@@ -169,6 +173,7 @@ func (c *OpenAIClient) streamLoop(ctx context.Context, body io.ReadCloser, ch ch
 				ID:        tc.ID,
 				Name:      tc.Function.Name,
 				Arguments: tc.Function.Arguments,
+				Index:     tc.Index,
 			})
 		}
 		ch <- chunk
@@ -210,6 +215,12 @@ func (m *MockClient) Name() string { return m.model + " (mock)" }
 
 // mockReplies 根据用户输入选择回复模板，让开发期对话看起来有生气
 func mockReply(messages []ChatMessage) string {
+	// 工具调用后的第二轮：引用工具返回结果
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "tool" {
+			return "（模拟回复）我调用了工具，返回结果是：「" + truncateStr(messages[i].Content, 60) + "」。你配好 API Key 之后，我就能更自然地用这些工具帮你做事啦。"
+		}
+	}
 	var lastUser string
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Role == "user" {
@@ -227,9 +238,69 @@ func mockReply(messages []ChatMessage) string {
 	return replies[idx]
 }
 
-func (m *MockClient) ChatStream(ctx context.Context, messages []ChatMessage, _ []Tool) (<-chan StreamChunk, error) {
-	reply := mockReply(messages)
+func truncateStr(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
+// decideMockToolCall mock 模式下模拟 LLM 的工具决策（便于无 Key 端到端验证 MCP 链路）
+func decideMockToolCall(messages []ChatMessage, tools []Tool) *ToolCall {
+	var lastUser string
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			lastUser = messages[i].Content
+			break
+		}
+	}
+	for _, ms := range messages {
+		if ms.Role == "tool" {
+			return nil // 已执行过工具，不再触发
+		}
+	}
+	for _, t := range tools {
+		switch {
+		case strings.Contains(lastUser, "计算") && t.Function.Name == "local__calculator":
+			return &ToolCall{ID: "call_mock_calc", Name: t.Function.Name, Arguments: mockExpression(lastUser)}
+		case strings.Contains(lastUser, "时间") && t.Function.Name == "local__get_time":
+			return &ToolCall{ID: "call_mock_time", Name: t.Function.Name, Arguments: "{}"}
+		}
+	}
+	return nil
+}
+
+// mockExpression 从"计算 xxx"中提取表达式
+func mockExpression(text string) string {
+	idx := strings.Index(text, "计算")
+	if idx >= 0 {
+		if expr := strings.TrimSpace(text[idx+2:]); expr != "" {
+			return `{"expression":"` + expr + `"}`
+		}
+	}
+	return `{"expression":"1+1"}`
+}
+
+func (m *MockClient) ChatStream(ctx context.Context, messages []ChatMessage, tools []Tool) (<-chan StreamChunk, error) {
 	ch := make(chan StreamChunk, 64)
+
+	// 模拟工具调用轮：流式返回 tool_call delta
+	if tc := decideMockToolCall(messages, tools); tc != nil {
+		go func() {
+			defer close(ch)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(10 * time.Millisecond):
+				ch <- StreamChunk{ToolCalls: []ToolCall{*tc}}
+			}
+			ch <- StreamChunk{Done: true}
+		}()
+		return ch, nil
+	}
+
+	reply := mockReply(messages)
 	go func() {
 		defer close(ch)
 		for _, r := range []rune(reply) {

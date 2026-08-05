@@ -173,6 +173,26 @@ func (c *Client) handle(msg WsMessage) error {
 	case "ping":
 		return c.sendJSON(WsMessage{Type: "pong", Payload: mustJSON(map[string]any{"time": time.Now().Unix()})})
 
+	case "mcp_installed_list":
+		return c.sendJSON(WsMessage{Type: "mcp_installed_list_ack", Payload: mustJSON(map[string]any{"servers": c.kernel.MCPStatus()})})
+
+	case "mcp_toggle":
+		var p struct {
+			ID      string `json:"id"`
+			Enabled bool   `json:"enabled"`
+		}
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return err
+		}
+		if p.Enabled {
+			if err := c.kernel.MCPStart(context.Background(), p.ID); err != nil {
+				return c.sendJSON(WsMessage{Type: "mcp_toggle_ack", Payload: mustJSON(map[string]any{"id": p.ID, "ok": false, "message": err.Error()})})
+			}
+		} else {
+			c.kernel.MCPStop(p.ID)
+		}
+		return c.sendJSON(WsMessage{Type: "mcp_toggle_ack", Payload: mustJSON(map[string]any{"id": p.ID, "ok": true, "enabled": p.Enabled})})
+
 	default:
 		return nil
 	}

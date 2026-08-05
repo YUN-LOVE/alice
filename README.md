@@ -30,6 +30,9 @@
 cd backend
 go run .                  # 监听 :8081（端口在 config/main.yaml）
 
+# 内置 MCP Server（提供 calculator/time/echo 工具，需先编译一次）
+cd mcp-server && go build -o alice-local-tools . && cd ..
+
 # 前端（Node 22+，包管理器用 pnpm）
 cd frontend
 pnpm install
@@ -70,6 +73,8 @@ llm:
 
 所有可调参数集中在 [`config/`](config/)，不改代码。**配置文件支持热重载**：修改后约 1 秒内自动生效（LLM 参数、System Prompt、情绪引擎、记忆容量等），无需重启后端。
 
+MCP Server 在 `config/mcp.yaml` 的 `servers` 列表注册（`command` 可为本地二进制或 `npx` 启动的任意现成 MCP Server），后端启动时自动拉起。
+
 ```
 config/
 ├── main.yaml              # 服务端口、日志
@@ -92,7 +97,7 @@ config/
 | 阶段一+ | 前后端解耦：运行时后端地址、CORS、多会话（session_id） | ✅ 完成 |
 | 阶段二 | 记忆系统：Memory Block（去重/容量）+ RAG（Embedding + Redis 检索 + 落库） | ✅ 完成 |
 | 阶段三 | 情绪引擎：高维向量、事件驱动、时间衰减、主动推送、持久化 | ✅ 完成 |
-| 阶段四 | MCP 层：MCP Manager + 注册表 + TTS/STT/Vision/Search | ⏳ 规划中 |
+| 阶段四 | MCP 层：stdio 协议客户端、生命周期管理、Function Calling 循环、内置工具 | ✅ 完成 |
 | 阶段五 | 前端补全：设置面板、MCP 市场、情绪可视化、主题切换 | ⏳ 规划中 |
 
 ## 目录结构

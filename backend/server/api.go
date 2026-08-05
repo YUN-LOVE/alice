@@ -71,6 +71,11 @@ func RegisterRoutes(mux *http.ServeMux, k *kernel.Kernel) {
 		w.Header().Set("Content-Disposition", `attachment; filename="alice-memory.json"`)
 		_ = json.NewEncoder(w).Encode(map[string]any{"total": len(mems), "memories": mems})
 	})
+
+	// MCP Server 状态
+	mux.HandleFunc("GET /api/v1/mcp/status", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"servers": k.MCPStatus()})
+	})
 }
 
 func memoryCount(w http.ResponseWriter, r *http.Request, k *kernel.Kernel) int64 {

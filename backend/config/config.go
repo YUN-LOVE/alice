@@ -16,6 +16,9 @@ type Config struct {
 	RAG     *RAGConfig
 	Block   *BlockConfig
 	MCP     *MCPConfig
+
+	// BaseDir 配置文件目录（绝对路径），用于解析相对路径（如 MCP command）
+	BaseDir string
 }
 
 type MainConfig struct {
@@ -99,20 +102,34 @@ type BlockConfig struct {
 	ReadOnly   bool `yaml:"read_only"`
 }
 
+// MCPServerConfig 已安装的 MCP Server 定义
+type MCPServerConfig struct {
+	ID      string   `yaml:"id"`
+	Name    string   `yaml:"name"`
+	Command string   `yaml:"command"` // 启动命令（可执行文件或 npx）
+	Args    []string `yaml:"args"`
+	Env     []string `yaml:"env"` // "KEY=VALUE"
+	Enabled bool     `yaml:"enabled"`
+}
+
 type MCPConfig struct {
 	Registry struct {
 		Source string `yaml:"source"`
 		File   string `yaml:"file"`
 	} `yaml:"registry"`
-	Servers   []map[string]interface{} `yaml:"servers"`
-	AutoStart bool                     `yaml:"auto_start"`
+	Servers   []MCPServerConfig `yaml:"servers"`
+	AutoStart bool              `yaml:"auto_start"`
 }
 
 // Load 从 configDir 加载全部 YAML 配置
 func Load(configDir string) (*Config, error) {
 	cfg := &Config{}
+	absDir, err := filepath.Abs(configDir)
+	if err != nil {
+		return nil, err
+	}
+	cfg.BaseDir = absDir
 
-	var err error
 	if cfg.Main, err = loadNamed[MainConfig](configDir, "main.yaml", ""); err != nil {
 		return nil, err
 	}
