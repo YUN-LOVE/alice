@@ -65,8 +65,9 @@
 .md-content > :first-child {
   margin-top: 0;
 }
-.md-content > :last-child {
-  margin-bottom: 0;
+/* 气泡底部不留白：清除任意层级最后一个元素的底部 margin */
+.md-content :last-child {
+  margin-bottom: 0 !important;
 }
 .md-content p {
   margin: 0.4em 0;

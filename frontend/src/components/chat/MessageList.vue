@@ -58,7 +58,10 @@ function formatTime(ts?: number): string {
             v-html="renderMarkdown(m.content)"
           />
         </div>
-        <span v-if="m.time" class="mt-0.5 px-1 text-[10px] m3-on-surface-variant">{{ formatTime(m.time) }}</span>
+        <span
+          v-if="m.time"
+          class="mt-0.5 px-1 text-[10px] leading-none m3-on-surface-variant"
+        >{{ formatTime(m.time) }}</span>
       </div>
     </div>
   </div>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useChatStore } from '../../stores/chat'
+import { THEME_STYLES } from '../../styles/theme'
 import { ws } from '../../services/ws'
 
 const chat = useChatStore()
@@ -131,6 +132,27 @@ function useDefault() {
           />
         </div>
         <p v-if="wallpaperInfo" class="mt-1 text-[10px] text-emerald-400">{{ wallpaperInfo }}</p>
+
+        <!-- 取色算法 -->
+        <div class="mt-2.5">
+          <div class="mb-1 text-[10px] m3-on-surface-variant">取色算法</div>
+          <div class="flex flex-wrap gap-1">
+            <button
+              v-for="s in THEME_STYLES"
+              :key="s.id"
+              class="rounded-full px-2.5 py-1 text-[11px] transition"
+              :class="
+                chat.themeStyle === s.id
+                  ? 'm3-secondary-container'
+                  : 'm3-surface-container-highest m3-on-surface-variant hover:opacity-80'
+              "
+              :title="s.desc"
+              @click="chat.setThemeStyle(s.id)"
+            >
+              {{ s.name }}
+            </button>
+          </div>
+        </div>
 
         <!-- 预设色板 -->
         <div class="mt-2 flex flex-wrap gap-1.5">

@@ -8,6 +8,7 @@ import {
   applyThemeFromSeed,
   applyThemeFromImage,
   type ThemeState,
+  type ThemeStyle,
 } from '../styles/theme'
 
 export interface ChatMessage {
@@ -36,6 +37,7 @@ export const useChatStore = defineStore('chat', {
     panelTab: 'memory' as 'memory' | 'mcp' | 'emotion',
     theme: 'dark' as 'dark' | 'light',
     seedColor: '#7c5cff',
+    themeStyle: 'tonal-spot' as ThemeStyle,
     initialized: false,
     emotion: {
       top: '',
@@ -55,6 +57,7 @@ export const useChatStore = defineStore('chat', {
       const savedTheme = getSavedTheme()
       this.theme = savedTheme.mode
       this.seedColor = savedTheme.seed
+      this.themeStyle = savedTheme.style
       this.applyTheme()
 
       ws.on('$open', () => {
@@ -182,12 +185,12 @@ export const useChatStore = defineStore('chat', {
       this.applyTheme()
     },
 
-    /** 应用 M3 主题：seed color → tonal palette → CSS 变量 */
+    /** 应用 M3 主题：seed + 取色算法 → CSS 变量 */
     applyTheme() {
-      applyThemeFromSeed(this.seedColor, this.theme)
+      applyThemeFromSeed(this.seedColor, this.themeStyle, this.theme)
       document.documentElement.classList.toggle('light', this.theme === 'light')
       document.body.style.background = 'var(--md-sys-color-surface)'
-      saveTheme({ seed: this.seedColor, mode: this.theme })
+      saveTheme({ seed: this.seedColor, mode: this.theme, style: this.themeStyle })
     },
 
     /** 设置种子色（手动选色） */
@@ -196,13 +199,19 @@ export const useChatStore = defineStore('chat', {
       this.applyTheme()
     },
 
+    /** 切换取色算法 */
+    setThemeStyle(style: ThemeStyle) {
+      this.themeStyle = style
+      this.applyTheme()
+    },
+
     /** 从壁纸图片取色生成主题（Monet），返回提取的种子色 */
     async applyWallpaper(source: string | HTMLImageElement): Promise<string> {
-      const seed = await applyThemeFromImage(source, this.theme)
+      const seed = await applyThemeFromImage(source, this.themeStyle, this.theme)
       this.seedColor = seed
       document.documentElement.classList.toggle('light', this.theme === 'light')
       document.body.style.background = 'var(--md-sys-color-surface)'
-      saveTheme({ seed, mode: this.theme })
+      saveTheme({ seed, mode: this.theme, style: this.themeStyle })
       return seed
     },
 
