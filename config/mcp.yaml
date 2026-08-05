@@ -26,8 +26,8 @@ mcp:
     # 启动 shell 里 export TAVILY_API_KEY=tvly-xxx 注入
     - id: "search"
       name: "搜索"
-      command: "npx"
-      args: ["-y", "tavily-mcp"]
+      command: "pnpx"
+      args: ["tavily-mcp"]
       env: []
       enabled: true
 
