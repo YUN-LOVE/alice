@@ -40,7 +40,7 @@ onUnmounted(() => unwatch?.())
 <template>
   <div class="m3-surface relative flex h-screen flex-col">
     <!-- 顶部栏 -->
-    <header class="m3-surface-container-low flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
+    <header class="m3-surface-container-low flex items-center gap-3 border-b border-zinc-500 px-4 py-3">
       <div
         class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-base font-bold m3-on-primary shadow-lg"
       >
@@ -96,7 +96,7 @@ onUnmounted(() => unwatch?.())
     </main>
 
     <!-- 输入区 -->
-    <footer class="m3-surface-container-low border-t border-zinc-800 px-4 py-3">
+    <footer class="m3-surface-container-low border-t border-zinc-500 px-4 py-3">
       <MessageInput />
       <!-- 底部状态栏 -->
       <div class="mt-2 flex gap-4 text-xs m3-on-surface-variant">

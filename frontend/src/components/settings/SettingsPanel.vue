@@ -78,7 +78,7 @@ function useDefault() {
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
     @click.self="chat.settingsOpen = false"
   >
-    <div class="w-[420px] rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+    <div class="w-[420px] rounded-2xl border border-zinc-500 bg-zinc-900 p-5 shadow-2xl">
       <h2 class="text-base font-medium text-zinc-100">设置</h2>
 
       <div class="mt-4">
@@ -87,7 +87,7 @@ function useDefault() {
           v-model="url"
           type="text"
           placeholder="http://192.168.1.5:8081（留空 = 自动）"
-          class="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-purple-500 focus:outline-none"
+          class="mt-1 w-full rounded-lg border border-zinc-500 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-purple-500 focus:outline-none"
         />
         <p class="mt-1 text-xs text-zinc-500">
           前端与后端完全解耦，填写任意部署了 Alice 后端的地址即可，HTTP 与 WebSocket 由此自动推导。
@@ -101,7 +101,7 @@ function useDefault() {
       </div>
 
       <!-- 连接信息 -->
-      <div v-if="chat.serverInfo" class="mt-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs">
+      <div v-if="chat.serverInfo" class="mt-3 rounded-lg border border-zinc-500 bg-zinc-950 p-3 text-xs">
         <div class="flex justify-between">
           <span class="text-zinc-500">LLM</span>
           <span class="text-zinc-300">{{ chat.serverInfo.llm }}</span>
@@ -125,7 +125,7 @@ function useDefault() {
             <input type="file" accept="image/*" class="hidden" @change="onWallpaperFile" />
           </label>
           <div
-            class="h-8 w-8 rounded-full border border-zinc-700"
+            class="h-8 w-8 rounded-full border border-zinc-500"
             :style="{ background: chat.seedColor }"
             title="当前种子色"
           />

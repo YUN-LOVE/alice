@@ -16,7 +16,7 @@ function roleLabel(role: string) {
         v-model="memory.searchQuery"
         type="text"
         placeholder="搜索历史记忆..."
-        class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-purple-500 focus:outline-none"
+        class="w-full rounded-lg border border-zinc-500 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-purple-500 focus:outline-none"
         @keyup.enter="memory.search(memory.searchQuery)"
       />
     </div>
@@ -29,7 +29,7 @@ function roleLabel(role: string) {
       <div
         v-for="r in memory.searchResults"
         :key="r.mem.id"
-        class="rounded-lg border border-zinc-800 bg-zinc-950 p-3"
+        class="rounded-lg border border-zinc-500 bg-zinc-950 p-3"
       >
         <div class="text-xs text-zinc-500">
           {{ roleLabel(r.mem.role) }} · 相似度 {{ (r.score * 100).toFixed(0) }}%
@@ -54,7 +54,7 @@ function roleLabel(role: string) {
       <div
         v-for="e in [...memory.entries].reverse()"
         :key="e.id"
-        class="rounded-lg border border-zinc-800 bg-zinc-950 p-3"
+        class="rounded-lg border border-zinc-500 bg-zinc-950 p-3"
       >
         <div class="text-xs text-zinc-500">
           {{ roleLabel(e.role) }}

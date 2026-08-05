@@ -41,12 +41,12 @@ const topEmotion = computed(() => chat.emotion.top)
       </div>
     </div>
 
-    <p class="mt-2 border-t border-zinc-800 pt-3 text-xs leading-relaxed text-zinc-500">
+    <p class="mt-2 border-t border-zinc-500 pt-3 text-xs leading-relaxed text-zinc-500">
       情绪由对话驱动、随时间自然衰减。情绪积累到一定程度，Alice 会主动来找你说话。
     </p>
 
     <!-- 主动推送开关 -->
-    <div class="mt-2 flex items-center justify-between border-t border-zinc-800 pt-3">
+    <div class="mt-2 flex items-center justify-between border-t border-zinc-500 pt-3">
       <div>
         <div class="text-sm text-zinc-200">主动推送</div>
         <div class="text-xs text-zinc-500">情绪积累时 Alice 主动找你说话</div>

@@ -40,7 +40,7 @@ onMounted(() => {
         暂无 MCP，去「市场」安装
       </div>
 
-      <div v-for="s in mcp.servers" :key="s.id" class="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
+      <div v-for="s in mcp.servers" :key="s.id" class="rounded-lg border border-zinc-500 bg-zinc-950 p-3">
         <!-- Server 行 -->
         <div class="flex items-center justify-between">
           <div>
@@ -68,7 +68,7 @@ onMounted(() => {
         </div>
 
         <!-- 工具级开关 -->
-        <div class="mt-2 border-t border-zinc-800 pt-2">
+        <div class="mt-2 border-t border-zinc-500 pt-2">
           <div class="mb-1 text-xs text-zinc-500">工具（{{ s.tools?.length ?? 0 }}）</div>
           <div v-for="t in s.tools ?? []" :key="t.name" class="flex items-center justify-between py-0.5">
             <span class="text-xs text-zinc-300">{{ t.name }}</span>
@@ -92,7 +92,7 @@ onMounted(() => {
     <!-- 市场 -->
     <div v-else class="flex flex-col gap-2">
       <div v-if="mcp.market.length === 0" class="text-xs text-zinc-600">市场暂无条目</div>
-      <div v-for="it in mcp.market" :key="it.id" class="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
+      <div v-for="it in mcp.market" :key="it.id" class="rounded-lg border border-zinc-500 bg-zinc-950 p-3">
         <div class="flex items-center justify-between">
           <div>
             <div class="text-sm text-zinc-100">{{ it.name }}</div>

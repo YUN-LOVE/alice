@@ -33,7 +33,7 @@ function onKeydown(e: KeyboardEvent) {
       v-model="text"
       rows="1"
       placeholder="和 Alice 聊聊..."
-      class="m3-surface-container-highest max-h-32 flex-1 resize-none rounded-[20px] border border-zinc-700 px-4 py-3 text-sm m3-on-surface-variant placeholder-zinc-500 focus:border-purple-500 focus:outline-none"
+      class="m3-surface-container-highest max-h-32 flex-1 resize-none rounded-[20px] border border-zinc-500 px-4 py-3 text-sm m3-on-surface-variant placeholder-zinc-500 focus:border-purple-500 focus:outline-none"
       @keydown="onKeydown"
     />
     <button

@@ -6,6 +6,7 @@ import {
   hexFromArgb,
   argbFromHex,
   type Scheme,
+  type Theme,
 } from '@material/material-color-utilities'
 
 export interface ThemeState {
@@ -34,7 +35,7 @@ export function saveTheme(state: ThemeState) {
 // 应用主题：根据 seed color 生成 M3 scheme 并写入 CSS 变量
 export function applyThemeFromSeed(seed: string, mode: 'dark' | 'light') {
   const theme = themeFromSourceColor(argbFromHex(seed))
-  applyScheme(theme.schemes[mode])
+  applyTheme(theme, mode)
 }
 
 // 从壁纸图片取色生成主题（Monet）
@@ -43,13 +44,25 @@ export async function applyThemeFromImage(
   mode: 'dark' | 'light'
 ): Promise<string> {
   const theme = await themeFromImage(image)
-  const seed = hexFromArgb(theme.source)
-  applyScheme(theme.schemes[mode])
-  return seed
+  applyTheme(theme, mode)
+  return hexFromArgb(theme.source)
 }
 
-// 生成 M3 scheme → CSS 变量
-function applyScheme(scheme: Scheme) {
+// 写入 M3 tokens + 由中性色阶生成 surface container 色阶
+function applyTheme(theme: Theme, mode: 'dark' | 'light') {
+  const scheme = theme.schemes[mode]
+  const neutral = theme.palettes.neutral
+
+  // M3 surface 色阶：按规范 tone 值从中性色板取值
+  // dark: 4/10/12/17/22；light: 100/96/94/92/90
+  const surfaceContainer = {
+    'surface-container-lowest': neutral.tone(mode === 'dark' ? 4 : 100),
+    'surface-container-low': neutral.tone(mode === 'dark' ? 10 : 96),
+    'surface-container': neutral.tone(mode === 'dark' ? 12 : 94),
+    'surface-container-high': neutral.tone(mode === 'dark' ? 17 : 92),
+    'surface-container-highest': neutral.tone(mode === 'dark' ? 22 : 90),
+  }
+
   const root = document.documentElement.style
   const tokens: [string, number][] = [
     ['primary', scheme.primary],
@@ -74,12 +87,6 @@ function applyScheme(scheme: Scheme) {
     ['outline-variant', scheme.outlineVariant],
     ['background', scheme.background],
     ['on-background', scheme.onBackground],
-    ['surface-container-lowest', scheme.surfaceContainerLowest],
-    ['surface-container-low', scheme.surfaceContainerLow],
-    ['surface-container', scheme.surfaceContainer],
-    ['surface-container-high', scheme.surfaceContainerHigh],
-    ['surface-container-highest', scheme.surfaceContainerHighest],
-    ['surface-tint', scheme.surfaceTint],
     ['inverse-surface', scheme.inverseSurface],
     ['inverse-primary', scheme.inversePrimary],
     ['shadow', scheme.shadow],
@@ -88,35 +95,43 @@ function applyScheme(scheme: Scheme) {
   for (const [k, v] of tokens) {
     root.setProperty(`--md-sys-color-${k}`, hexFromArgb(v))
   }
+  for (const [k, v] of Object.entries(surfaceContainer)) {
+    root.setProperty(`--md-sys-color-${k}`, hexFromArgb(v))
+  }
   // 同步 zinc 调色板（现有组件用 bg-zinc-* / text-zinc-* 自动获得 M3 配色）
-  mapZincToScheme(scheme)
+  mapZincToScheme(scheme, surfaceContainer)
 }
 
-// 把 Tailwind 的 zinc 调色板映射到 M3 token，让现有组件无需改动即获得 M3 配色
-function mapZincToScheme(scheme: Scheme) {
+// 把 Tailwind 的 zinc 调色板映射到 M3 token，让现有组件无需改动即获得 M3 配色。
+// 关键：surface 有 5 层色阶（lowest→highest 渐亮），文字分主/次两级，
+// 边框用 outline 系——这样 UI 才有层次且对比度符合 M3 规范。
+function mapZincToScheme(
+  scheme: Scheme,
+  sc: { [k: string]: number } /* surface container 色阶（argb） */
+) {
   const root = document.documentElement.style
   const hex = (v: number) => hexFromArgb(v)
   const map: Record<string, number> = {
-    // 背景/表面
-    '--color-zinc-950': scheme.surface,
-    '--color-zinc-900': scheme.surfaceContainerHigh,
-    '--color-zinc-800': scheme.surfaceContainerHighest,
-    '--color-zinc-700': scheme.outlineVariant,
-    // 边框/次要
-    '--color-zinc-600': scheme.outline,
-    '--color-zinc-500': scheme.onSurfaceVariant,
+    // 背景/表面：5 层色阶（从深到浅）
+    '--color-zinc-950': sc['surface-container-lowest'], // 页面最底
+    '--color-zinc-900': sc['surface-container-low'], // 顶部栏 / 面板
+    '--color-zinc-800': sc['surface-container'], // 卡片 / 气泡
+    '--color-zinc-700': sc['surface-container-high'], // 输入框 / 浮动层
+    '--color-zinc-600': sc['surface-container-highest'],
+    // 边框 / 分割线
+    '--color-zinc-500': scheme.outline,
+    '--color-zinc-300': scheme.outlineVariant,
+    // 文字（主/次两级，符合 M3 对比度规范）
     '--color-zinc-400': scheme.onSurfaceVariant,
-    '--color-zinc-300': scheme.outline,
     '--color-zinc-200': scheme.onSurfaceVariant,
-    // 文字
     '--color-zinc-100': scheme.onSurface,
     '--color-zinc-50': scheme.onSurface,
-    // 强调色 → primary / tertiary
+    // 强调色 → primary / tertiary / error
     '--color-purple-500': scheme.primary,
     '--color-purple-600': scheme.primary,
     '--color-pink-500': scheme.tertiary,
-    '--color-emerald-400': scheme.primary,
-    '--color-emerald-500': scheme.primary,
+    '--color-emerald-400': scheme.tertiary,
+    '--color-emerald-500': scheme.tertiary,
     '--color-red-500': scheme.error,
   }
   for (const [k, v] of Object.entries(map)) {

@@ -36,9 +36,9 @@ watch(
   >
     <aside
       v-if="chat.panelOpen"
-      class="m3-surface-container absolute bottom-0 right-0 top-14 z-40 flex w-[340px] flex-col border-l border-zinc-800"
+      class="m3-surface-container absolute bottom-0 right-0 top-14 z-40 flex w-[340px] flex-col border-l border-zinc-500"
     >
-      <div class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+      <div class="flex items-center justify-between border-b border-zinc-500 px-4 py-3">
         <div class="flex gap-1">
           <button
             v-for="t in tabs"
