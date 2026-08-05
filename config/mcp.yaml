@@ -21,6 +21,14 @@ mcp:
       env: []
       enabled: true
 
+    # 免费搜索（DuckDuckGo，无需 key；免费后端可能被反爬限流，量大建议换 Tavily/Brave）
+    - id: "search"
+      name: "搜索"
+      command: "npx"
+      args: ["-y", "duckduckgo-mcp-server"]
+      env: []
+      enabled: true
+
   # 远程 MCP（HTTP/SSE 方式接入第三方 MCP Server）示例：
   # - id: "remote-search"
   #   name: "远程搜索"

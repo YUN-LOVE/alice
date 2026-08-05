@@ -269,9 +269,25 @@ func decideMockToolCall(messages []ChatMessage, tools []Tool) *ToolCall {
 		case (strings.Contains(lastUser, "图片") || strings.Contains(lastUser, "看看")) && t.Function.Name == "vision__describe_image":
 			path := mockImagePath(lastUser)
 			return &ToolCall{ID: "call_mock_vision", Name: t.Function.Name, Arguments: `{"path":"` + path + `"}`}
+		case strings.Contains(lastUser, "搜索") && strings.Contains(t.Function.Name, "search"):
+			return &ToolCall{ID: "call_mock_search", Name: t.Function.Name, Arguments: `{"query":"` + mockSearchQuery(lastUser) + `"}`}
 		}
 	}
 	return nil
+}
+
+// mockSearchQuery 从"搜索 xxx"中提取查询词
+func mockSearchQuery(text string) string {
+	idx := strings.Index(text, "搜索")
+	if idx >= 0 {
+		if q := strings.TrimSpace(text[idx+len("搜索"):]); q != "" {
+			q = strings.TrimRight(q, "。,.，,!？?")
+			if q != "" {
+				return q
+			}
+		}
+	}
+	return "Alice AI"
 }
 
 // mockImagePath 从消息中提取图片路径，找不到则用默认测试路径

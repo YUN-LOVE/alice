@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -49,7 +50,9 @@ type ClientConfig struct {
 // Start 启动子进程并完成 MCP 握手（initialize）
 func (c *Client) Start(ctx context.Context, cfg ClientConfig) error {
 	cmd := exec.CommandContext(ctx, cfg.Command, cfg.Args...)
-	cmd.Env = append(append([]string{}, cfg.Env...), "MCP_NON_INTERACTIVE=1")
+	// 继承父进程环境（PATH 等），追加自定义环境变量
+	cmd.Env = append(os.Environ(), cfg.Env...)
+	cmd.Env = append(cmd.Env, "MCP_NON_INTERACTIVE=1")
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

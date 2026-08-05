@@ -92,9 +92,10 @@ func (k *Kernel) startArchiveTicker() {
 	}()
 }
 
-// resolveMCPCommand 相对路径基于配置目录解析（避免受进程工作目录影响）
+// resolveMCPCommand 相对路径基于配置目录解析（避免受进程工作目录影响）；
+// 纯命令名（如 npx / python）走系统 PATH，不做路径解析
 func resolveMCPCommand(configDir, command string) string {
-	if command == "" || filepath.IsAbs(command) {
+	if command == "" || filepath.IsAbs(command) || !strings.ContainsAny(command, `/\`) {
 		return command
 	}
 	abs, err := filepath.Abs(filepath.Join(configDir, command))
