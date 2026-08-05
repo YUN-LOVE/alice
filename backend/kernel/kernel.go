@@ -383,14 +383,24 @@ func (k *Kernel) chatLoop(ctx context.Context, messages []ChatMessage) (<-chan S
 				return
 			}
 
-			// 聚合本轮输出（content + tool_calls 分片）
+			// 边接收边实时转发（保持真实流式节奏），同时聚合判断是否有工具调用。
+			// 工具调用轮次 LLM 通常不输出文字；极少数"先说话再调工具"会残留已显示文字，可接受。
 			var contentSB strings.Builder
 			pending := map[int]ToolCall{}
+			toolCallsSeen := false
 			for c := range ch {
 				if c.Content != "" {
 					contentSB.WriteString(c.Content)
+					if !toolCallsSeen {
+						select {
+						case <-ctx.Done():
+							return
+						case out <- StreamChunk{Content: c.Content}:
+						}
+					}
 				}
 				for _, tc := range c.ToolCalls {
+					toolCallsSeen = true
 					acc := pending[tc.Index]
 					if tc.ID != "" {
 						acc.ID = tc.ID
@@ -404,29 +414,22 @@ func (k *Kernel) chatLoop(ctx context.Context, messages []ChatMessage) (<-chan S
 				}
 			}
 
+			// 无工具调用：内容已实时转发完毕，本轮即最终回复
+			if !toolCallsSeen {
+				select {
+				case <-ctx.Done():
+					return
+				case out <- StreamChunk{Done: true}:
+				}
+				k.store(ctx, lastUserText(messages), contentSB.String())
+				return
+			}
+
 			toolCalls := make([]ToolCall, 0, len(pending))
 			for i := 0; i < len(pending); i++ {
 				if acc, ok := pending[i]; ok {
 					toolCalls = append(toolCalls, acc)
 				}
-			}
-
-			// 无工具调用：本轮即为最终回复，转发内容
-			if len(toolCalls) == 0 {
-				content := contentSB.String()
-				for _, r := range []rune(content) {
-					select {
-					case <-ctx.Done():
-						return
-					case out <- StreamChunk{Content: string(r)}:
-					}
-				}
-				select {
-				case <-ctx.Done():
-				case out <- StreamChunk{Done: true}:
-				}
-				k.store(ctx, lastUserText(messages), content)
-				return
 			}
 
 			// 有工具调用：执行并回传
