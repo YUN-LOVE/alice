@@ -1,12 +1,24 @@
 ## Development
 
-When starting the dev server, use background mode:
+Package manager is **pnpm**（不要用 npm）。
+
+Starting the dev server in background mode:
 
 ```
-astro dev --background
+pnpm astro dev --background
 ```
 
-Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
+Manage the background server with `pnpm astro dev stop`, `pnpm astro dev status`, and `pnpm astro dev logs`.
+
+Common commands:
+
+```
+pnpm install        # 安装依赖
+pnpm dev            # 开发（默认监听 0.0.0.0:4321，局域网可访问）
+pnpm build          # 构建
+```
+
+If dependencies with build scripts are ignored by pnpm (`ERR_PNPM_IGNORED_BUILDS`), run `pnpm approve-builds --all`.
 
 ## Documentation
 

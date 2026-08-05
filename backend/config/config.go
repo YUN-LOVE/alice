@@ -152,6 +152,14 @@ func Load(configDir string) (*Config, error) {
 	}
 	cfg.Kernel.SystemPrompt = string(promptBytes)
 
+	// API Key 支持环境变量覆盖（配置文件保持干净，密钥不进仓库）
+	if cfg.Kernel.LLM.APIKey == "" {
+		cfg.Kernel.LLM.APIKey = os.Getenv("ALICE_LLM_API_KEY")
+	}
+	if cfg.RAG.Embedding.APIKey == "" {
+		cfg.RAG.Embedding.APIKey = os.Getenv("ALICE_EMBED_API_KEY")
+	}
+
 	return cfg, nil
 }
 

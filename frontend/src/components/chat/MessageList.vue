@@ -1,15 +1,11 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
 import { useChatStore } from '../../stores/chat'
 
 const chat = useChatStore()
-
-// 消息列表 DOM 滚动到底（由 ChatApp 的 $subscribe 触发 nextTick 后执行）
-const listRef = ref<HTMLElement | null>(null)
 </script>
 
 <template>
-  <div ref="listRef" class="flex flex-col gap-4 py-4">
+  <div class="flex flex-col gap-4 py-4">
     <template v-if="chat.messages.length === 0">
       <div class="mt-16 text-center text-zinc-500">
         <p class="text-lg">你好，我是 Alice</p>

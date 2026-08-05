@@ -30,10 +30,10 @@
 cd backend
 go run .                  # 监听 :8081（端口在 config/main.yaml）
 
-# 前端（Node 22+）
+# 前端（Node 22+，包管理器用 pnpm）
 cd frontend
-npm install
-npm run dev               # http://localhost:4321
+pnpm install
+pnpm dev                  # http://localhost:4321（监听 0.0.0.0，局域网可访问）
 ```
 
 打开 `http://localhost:4321` 即可聊天。
@@ -68,7 +68,7 @@ llm:
 
 ## 配置
 
-所有可调参数集中在 [`config/`](config/)，不改代码：
+所有可调参数集中在 [`config/`](config/)，不改代码。**配置文件支持热重载**：修改后约 1 秒内自动生效（LLM 参数、System Prompt、情绪引擎、记忆容量等），无需重启后端。
 
 ```
 config/

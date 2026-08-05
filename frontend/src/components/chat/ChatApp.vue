@@ -1,18 +1,26 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useChatStore } from '../../stores/chat'
 import MessageList from './MessageList.vue'
 import MessageInput from './MessageInput.vue'
 import SettingsPanel from '../settings/SettingsPanel.vue'
 
 const chat = useChatStore()
+const scrollContainer = ref<HTMLElement | null>(null)
 let unwatch: (() => void) | null = null
+
+async function scrollToBottom() {
+  await nextTick()
+  if (scrollContainer.value) {
+    scrollContainer.value.scrollTo({ top: scrollContainer.value.scrollHeight })
+  }
+}
 
 onMounted(() => {
   void chat.connect()
   // 新消息时自动滚到底
-  unwatch = chat.$subscribe((_, state) => {
-    scrollToBottom()
+  unwatch = chat.$subscribe(() => {
+    void scrollToBottom()
   })
 })
 
@@ -50,7 +58,7 @@ onUnmounted(() => unwatch?.())
     </header>
 
     <!-- 消息列表 -->
-    <main class="flex-1 overflow-y-auto px-4">
+    <main ref="scrollContainer" class="flex-1 overflow-y-auto px-4">
       <MessageList />
     </main>
 
