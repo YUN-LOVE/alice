@@ -1,7 +1,7 @@
 import { defineStore, createPinia, setActivePinia } from 'pinia'
 import { ws } from '../services/ws'
 import { ensureConfig, getBackendUrl, setBackendUrl, wsUrl, httpBase } from '../services/backend'
-import { getHistory } from '../services/api'
+import { getHistory, getProactiveEnabled, setProactiveEnabled } from '../services/api'
 
 export interface ChatMessage {
   id: number
@@ -33,6 +33,7 @@ export const useChatStore = defineStore('chat', {
       top: '',
       state: {} as Record<string, number>,
     },
+    proactiveEnabled: true,
   }),
 
   actions: {
@@ -77,6 +78,26 @@ export const useChatStore = defineStore('chat', {
 
       // 拉取记忆条数（状态栏展示）
       void this.refreshMemoryCount()
+      void this.loadProactiveEnabled()
+    },
+
+    async loadProactiveEnabled() {
+      try {
+        const data = await getProactiveEnabled()
+        this.proactiveEnabled = data.enabled
+      } catch {
+        // 忽略
+      }
+    },
+
+    async toggleProactive() {
+      const next = !this.proactiveEnabled
+      this.proactiveEnabled = next
+      try {
+        await setProactiveEnabled(next)
+      } catch {
+        this.proactiveEnabled = !next
+      }
     },
 
     async refreshMemoryCount() {

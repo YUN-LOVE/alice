@@ -92,6 +92,7 @@ HTTP API:      http://host:port/api/v1/...
 | `/api/v1/mcp/status` | GET | 已安装 MCP Server 状态（含工具级开关） | ✅ 已实现 |
 | `/api/v1/mcp/market` | GET | MCP 市场可安装项列表 | ✅ 已实现 |
 | `/api/v1/emotion/events` | GET | 情绪显著事件记录（`?limit=` 可选） | ✅ 已实现 |
+| `/api/v1/emotion/proactive` | GET / POST | 主动推送开关（GET 查询 / POST `{"enabled":bool}` 切换，持久化） | ✅ 已实现 |
 | `/api/v1/history` | GET | 当天聊天记录（`?date=YYYY-MM-DD` 可选） | ✅ 已实现 |
 | `/api/v1/history/dates` | GET | 已归档日期列表 | ✅ 已实现 |
 

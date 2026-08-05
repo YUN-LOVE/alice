@@ -3,7 +3,6 @@ import { computed } from 'vue'
 import { useChatStore } from '../../stores/chat'
 
 const chat = useChatStore()
-
 // 情绪维度 + 中文名
 const dims = computed(() => {
   const state = chat.emotion.state
@@ -45,5 +44,25 @@ const topEmotion = computed(() => chat.emotion.top)
     <p class="mt-2 border-t border-zinc-800 pt-3 text-xs leading-relaxed text-zinc-500">
       情绪由对话驱动、随时间自然衰减。情绪积累到一定程度，Alice 会主动来找你说话。
     </p>
+
+    <!-- 主动推送开关 -->
+    <div class="mt-2 flex items-center justify-between border-t border-zinc-800 pt-3">
+      <div>
+        <div class="text-sm text-zinc-200">主动推送</div>
+        <div class="text-xs text-zinc-500">情绪积累时 Alice 主动找你说话</div>
+      </div>
+      <button
+        class="relative h-5 w-9 rounded-full transition"
+        :class="chat.proactiveEnabled ? 'bg-purple-500' : 'bg-zinc-700'"
+        role="switch"
+        :aria-checked="chat.proactiveEnabled"
+        @click="chat.toggleProactive()"
+      >
+        <span
+          class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
+          :class="chat.proactiveEnabled ? 'left-[18px]' : 'left-0.5'"
+        />
+      </button>
+    </div>
   </div>
 </template>

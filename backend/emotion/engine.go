@@ -22,7 +22,8 @@ type Engine struct {
 	vector   map[string]float64
 	lastTick time.Time
 	// 主动推送状态
-	lastPush time.Time
+	lastPush         time.Time
+	proactiveEnabled bool
 	// 事件匹配缓存
 	eventKeywords map[string][]string
 }
@@ -30,11 +31,12 @@ type Engine struct {
 // New 创建情绪引擎，尝试从 Redis 恢复持久化状态
 func New(cfg *config.EmotionConfig, redisAddr, redisPassword string, redisDB int) *Engine {
 	e := &Engine{
-		cfg:           cfg,
-		vector:        make(map[string]float64),
-		lastTick:      time.Now(),
-		lastPush:      time.Now(),
-		eventKeywords: make(map[string][]string),
+		cfg:              cfg,
+		vector:           make(map[string]float64),
+		lastTick:         time.Now(),
+		lastPush:         time.Now(),
+		proactiveEnabled: cfg.Proactive.Enabled,
+		eventKeywords:    make(map[string][]string),
 	}
 	if cfg.Persistence.Enabled {
 		e.rdb = redis.NewClient(&redis.Options{
@@ -58,8 +60,28 @@ func New(cfg *config.EmotionConfig, redisAddr, redisPassword string, redisDB int
 		if err := e.load(ctx); err != nil {
 			log.Printf("[emotion] 状态恢复失败（使用初始值）: %v", err)
 		}
+		e.loadProactiveSwitch()
 	}
 	return e
+}
+
+const proactiveKey = "alice:emotion:proactive_enabled"
+
+// loadProactiveSwitch 从 Redis 恢复主动推送开关状态
+func (e *Engine) loadProactiveSwitch() {
+	if e.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	v, err := e.rdb.Get(ctx, proactiveKey).Result()
+	if err != nil {
+		return
+	}
+	e.mu.Lock()
+	e.proactiveEnabled = v == "1"
+	e.mu.Unlock()
+	log.Printf("[emotion] 主动推送开关: %v", e.proactiveEnabled)
 }
 
 // DetectEvent 根据用户文本识别事件名（关键词匹配）
@@ -178,10 +200,13 @@ func (e *Engine) Highest() (string, float64) {
 	return top, v
 }
 
-// ShouldProactive 判断是否应触发主动推送（超阈值 + 冷却期已过）
+// ShouldProactive 判断是否应触发主动推送（超阈值 + 冷却期已过 + 开关开启）
 // 命中后内部重置冷却时间
 func (e *Engine) ShouldProactive() (bool, string) {
-	if !e.cfg.Proactive.Enabled {
+	e.mu.Lock()
+	enabled := e.proactiveEnabled
+	e.mu.Unlock()
+	if !enabled {
 		return false, ""
 	}
 	_, v := e.Highest()
@@ -196,6 +221,30 @@ func (e *Engine) ShouldProactive() (bool, string) {
 	}
 	e.lastPush = time.Now()
 	return true, e.proactiveTextLocked()
+}
+
+// ProactiveEnabled 主动推送是否开启（运行时开关，可从 Redis 恢复）
+func (e *Engine) ProactiveEnabled() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.proactiveEnabled
+}
+
+// SetProactiveEnabled 设置主动推送开关（持久化到 Redis）
+func (e *Engine) SetProactiveEnabled(enabled bool) {
+	e.mu.Lock()
+	e.proactiveEnabled = enabled
+	e.mu.Unlock()
+
+	if e.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		val := "0"
+		if enabled {
+			val = "1"
+		}
+		_ = e.rdb.Set(ctx, proactiveKey, val, 0).Err()
+	}
 }
 
 // proactiveTextLocked 根据当前最高情绪取主动话术

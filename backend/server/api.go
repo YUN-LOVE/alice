@@ -143,6 +143,22 @@ func RegisterRoutes(mux *http.ServeMux, k *kernel.Kernel) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"events": events})
 	})
+
+	// 主动推送开关（查询 / 切换）
+	mux.HandleFunc("GET /api/v1/emotion/proactive", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"enabled": k.ProactiveEnabled()})
+	})
+	mux.HandleFunc("POST /api/v1/emotion/proactive", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"message": "请求格式错误"})
+			return
+		}
+		k.SetProactiveEnabled(body.Enabled)
+		writeJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled})
+	})
 }
 
 func memoryCount(w http.ResponseWriter, r *http.Request, k *kernel.Kernel) int64 {

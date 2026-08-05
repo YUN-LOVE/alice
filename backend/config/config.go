@@ -79,8 +79,9 @@ type EmotionConfig struct {
 		Enabled bool `yaml:"enabled"`
 		TTLSec  int  `yaml:"ttl_seconds"`
 	} `yaml:"persistence"`
-	EventMap  map[string]EmotionEvent `yaml:"-"`
-	Templates []EmotionTemplate       `yaml:"-"`
+	EventMap       map[string]EmotionEvent `yaml:"-"`
+	Templates      []EmotionTemplate       `yaml:"-"`
+	ProactivePrompt string                 `yaml:"-"` // 主动推送提示词模板（{emotion} 占位）
 }
 
 type RAGConfig struct {
@@ -169,6 +170,14 @@ func Load(configDir string) (*Config, error) {
 		return nil, err
 	}
 	cfg.Emotion.Templates = *tpls
+
+	// 主动推送提示词模板
+	proactivePrompt, err := os.ReadFile(filepath.Join(configDir, "prompts", "proactive_prompt.txt"))
+	if err != nil {
+		cfg.Emotion.ProactivePrompt = "你现在想主动联系用户说句话。{emotion} 请直接给出一句自然、真诚的关心或问候，一句话即可，不要解释。"
+	} else {
+		cfg.Emotion.ProactivePrompt = string(proactivePrompt)
+	}
 
 	// System Prompt（阶段一即启用）
 	promptBytes, err := os.ReadFile(filepath.Join(configDir, "prompts", "system_prompt.txt"))

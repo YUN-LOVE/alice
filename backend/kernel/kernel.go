@@ -61,7 +61,9 @@ func NewKernel(cfg *config.Config) *Kernel {
 	}
 
 	// 加载 MCP 市场注册表（本地文件或远程 URL）
-	registryPath := resolveMCPCommand(cfg.BaseDir, cfg.MCP.Registry.File)
+	// 相对路径基于项目根（config 的上级）解析：config/ 与 registry/ 平级
+	regBase := filepath.Dir(cfg.BaseDir)
+	registryPath := resolveMCPCommand(regBase, cfg.MCP.Registry.File)
 	if reg, err := mcp.LoadRegistry(cfg.MCP.Registry.Source, registryPath); err != nil {
 		log.Printf("[kernel] 警告: MCP 注册表加载失败（市场不可用）: %v", err)
 	} else {
@@ -300,12 +302,18 @@ func (k *Kernel) proactiveAllowedNow() bool {
 	return h >= start || h <= end // 跨午夜时段
 }
 
-// generateProactive 由 LLM 根据当前情绪生成主动关心的话术（失败/空则放弃）
+// generateProactive 由 LLM 根据当前情绪生成主动关心的话术（提示词模板在 prompts/proactive_prompt.txt）
 func (k *Kernel) generateProactive() string {
 	desc, _, _ := k.engine.Summary()
+	prompt := k.cfg.Emotion.ProactivePrompt
+	if prompt == "" {
+		prompt = "你现在想主动联系用户说句话。{emotion} 请直接给出一句自然、真诚的关心或问候，一句话即可，不要解释。"
+	}
+	prompt = strings.ReplaceAll(prompt, "{emotion}", desc)
+
 	messages := []ChatMessage{
 		{Role: "system", Content: k.cfg.Kernel.SystemPrompt},
-		{Role: "user", Content: "你现在想主动联系用户说句话。" + desc + " 请直接给出一句自然、真诚的关心或问候，一句话即可，不要解释。"},
+		{Role: "user", Content: prompt},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -659,6 +667,15 @@ func (k *Kernel) MCPStop(id string) { k.mcp.Stop(id) }
 // MCPToolToggle 工具级启用/禁用
 func (k *Kernel) MCPToolToggle(serverID, toolName string, enabled bool) error {
 	return k.mcp.SetToolEnabled(serverID, toolName, enabled)
+}
+
+// ProactiveEnabled 主动推送开关状态
+func (k *Kernel) ProactiveEnabled() bool { return k.engine.ProactiveEnabled() }
+
+// SetProactiveEnabled 切换主动推送开关（运行时，持久化）
+func (k *Kernel) SetProactiveEnabled(enabled bool) {
+	k.engine.SetProactiveEnabled(enabled)
+	log.Printf("[kernel] 主动推送已%s", map[bool]string{true: "开启", false: "关闭"}[enabled])
 }
 
 // MCPRegistry 返回 MCP 市场注册表

@@ -70,6 +70,17 @@ export function getHealth(): Promise<{ status: string; llm: string; embedding: s
   return request('/health')
 }
 
+export function getProactiveEnabled(): Promise<{ enabled: boolean }> {
+  return request('/emotion/proactive')
+}
+
+export function setProactiveEnabled(enabled: boolean): Promise<{ enabled: boolean }> {
+  return request('/emotion/proactive', {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  })
+}
+
 export interface HistoryMessage {
   role: string
   content: string
