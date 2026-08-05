@@ -4,7 +4,7 @@ llm:
   provider: "deepseek"          # deepseek / openai / siliconflow / mock
   base_url: "https://api.deepseek.com/v1"
   api_key: ""                   # 留空则使用 mock 模式
-  model: "deepseek-chat"
+  model: "deepseek-v4-flash"
   temperature: 0.8
   max_tokens: 2048
   stream: true

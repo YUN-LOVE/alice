@@ -15,6 +15,14 @@ export interface MCServerStatus {
   enabled: boolean
   running: boolean
   tool_count: number
+  tools: { name: string; enabled: boolean }[]
+}
+
+export interface MarketItem {
+  id: string
+  name: string
+  description: string
+  installed: boolean
 }
 
 export interface SearchResult {
@@ -52,6 +60,10 @@ export function searchMemory(query: string): Promise<{ results: SearchResult[] }
 
 export function getMCPStatus(): Promise<{ servers: MCServerStatus[] }> {
   return request('/mcp/status')
+}
+
+export function getMCPMarket(): Promise<{ items: MarketItem[] }> {
+  return request('/mcp/market')
 }
 
 export function getHealth(): Promise<{ status: string; llm: string; embedding: string; memory: number }> {

@@ -207,3 +207,28 @@ func loadNamed[T any](configDir, filename, key string) (*T, error) {
 	}
 	return &v, nil
 }
+
+// UpdateMCP 更新 mcp.yaml 的 servers 列表并写回（安装/卸载用）。
+// 注意：会重写文件（不保留注释），随后 config.Watch 热重载自动生效。
+func UpdateMCP(configDir string, servers []MCPServerConfig) error {
+	path := filepath.Join(configDir, "mcp.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var root map[string]any
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return err
+	}
+	mcpNode, ok := root["mcp"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("mcp.yaml 缺少顶层 mcp 段")
+	}
+	mcpNode["servers"] = servers
+
+	out, err := yaml.Marshal(root)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
+}

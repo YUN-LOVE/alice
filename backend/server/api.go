@@ -109,6 +109,24 @@ func RegisterRoutes(mux *http.ServeMux, k *kernel.Kernel) {
 	mux.HandleFunc("GET /api/v1/mcp/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"servers": k.MCPStatus()})
 	})
+
+	// MCP 市场（注册表可安装项）
+	mux.HandleFunc("GET /api/v1/mcp/market", func(w http.ResponseWriter, r *http.Request) {
+		items := []map[string]any{}
+		if reg := k.MCPRegistry(); reg != nil {
+			installed := make(map[string]bool)
+			for _, s := range k.MCPStatus() {
+				installed[s.ID] = true
+			}
+			for _, it := range reg.Servers {
+				items = append(items, map[string]any{
+					"id": it.ID, "name": it.Name, "description": it.Description,
+					"installed": installed[it.ID],
+				})
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
 }
 
 func memoryCount(w http.ResponseWriter, r *http.Request, k *kernel.Kernel) int64 {

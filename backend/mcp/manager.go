@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"alice/config"
 )
 
@@ -21,34 +23,51 @@ type ManagedServer struct {
 	URL       string
 	Headers   map[string]string
 
-	mu      sync.Mutex
-	conn    MCPConn
-	tools   []Tool
-	running bool
+	mu          sync.Mutex
+	conn        MCPConn
+	tools       []Tool
+	toolEnabled map[string]bool // 工具级开关（缺省启用）
+	running     bool
+}
+
+// ToolStatus 单个工具的启用状态
+type ToolStatus struct {
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
 }
 
 // Status MCP Server 状态（HTTP/WS 返回用）
 type Status struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Enabled  bool   `json:"enabled"`
-	Running  bool   `json:"running"`
-	ToolCount int   `json:"tool_count"`
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	Enabled   bool         `json:"enabled"`
+	Running   bool         `json:"running"`
+	ToolCount int          `json:"tool_count"`
+	Tools     []ToolStatus `json:"tools"`
 }
 
 // Manager MCP Server 生命周期管理
 type Manager struct {
-	mu      sync.Mutex
-	servers map[string]*ManagedServer
+	mu        sync.Mutex
+	servers   map[string]*ManagedServer
 	autoStart bool
+	rdb       *redis.Client
 }
 
 // NewManager 创建 Manager
-func NewManager(autoStart bool) *Manager {
-	return &Manager{
+func NewManager(autoStart bool, redisAddr, redisPassword string, redisDB int) *Manager {
+	m := &Manager{
 		servers:   make(map[string]*ManagedServer),
 		autoStart: autoStart,
 	}
+	if redisAddr != "" {
+		m.rdb = redis.NewClient(&redis.Options{
+			Addr:     redisAddr,
+			Password: redisPassword,
+			DB:       redisDB,
+		})
+	}
+	return m
 }
 
 // Add 注册一个已配置的 Server
@@ -143,7 +162,64 @@ func (m *Manager) Start(ctx context.Context, id string) error {
 	}
 	s.conn = conn
 	s.tools = conn.Tools()
+	s.toolEnabled = make(map[string]bool, len(s.tools))
+	for _, t := range s.tools {
+		s.toolEnabled[t.Name] = true
+	}
 	s.running = true
+	// 从 Redis 恢复工具级开关
+	m.loadToolStatesLocked(s)
+	return nil
+}
+
+// toolStateKey Redis key：server 下各工具的启用状态
+func toolStateKey(serverID string) string { return "alice:mcp:tools:" + serverID }
+
+// loadToolStatesLocked 从 Redis 读取该 server 的工具开关（无记录则保持启用）
+func (m *Manager) loadToolStatesLocked(s *ManagedServer) {
+	if m.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	states, err := m.rdb.HGetAll(ctx, toolStateKey(s.ID)).Result()
+	if err != nil {
+		return
+	}
+	for name, val := range states {
+		if _, exists := s.toolEnabled[name]; exists {
+			s.toolEnabled[name] = val == "1"
+		}
+	}
+}
+
+// SetToolEnabled 设置工具级启用状态（持久化）
+func (m *Manager) SetToolEnabled(serverID, toolName string, enabled bool) error {
+	m.mu.Lock()
+	s, ok := m.servers[serverID]
+	m.mu.Unlock()
+	if !ok {
+		return errServerNotFound(serverID)
+	}
+
+	s.mu.Lock()
+	if s.toolEnabled == nil {
+		s.toolEnabled = make(map[string]bool)
+	}
+	s.toolEnabled[toolName] = enabled
+	s.mu.Unlock()
+
+	if m.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		val := "0"
+		if enabled {
+			val = "1"
+		}
+		if err := m.rdb.HSet(ctx, toolStateKey(serverID), toolName, val).Err(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -165,7 +241,7 @@ func (m *Manager) Stop(id string) {
 	s.tools = nil
 }
 
-// Tools 返回所有运行中 Server 的工具（带 serverID 前缀）
+// Tools 返回所有运行中 Server 的已启用工具（带 serverID 前缀）
 func (m *Manager) Tools() []Tool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -174,6 +250,9 @@ func (m *Manager) Tools() []Tool {
 		s.mu.Lock()
 		if s.running {
 			for _, t := range s.tools {
+				if s.toolEnabled != nil && !s.toolEnabled[t.Name] {
+					continue // 工具级关闭
+				}
 				t.Name = s.ID + "__" + t.Name
 				out = append(out, t)
 			}
@@ -218,15 +297,24 @@ func (m *Manager) Call(ctx context.Context, fullName string, args map[string]any
 	return sb.String(), nil
 }
 
-// Status 返回所有 Server 状态
+// Status 返回所有 Server 状态（含工具级开关）
 func (m *Manager) Status() []Status {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]Status, 0, len(m.servers))
 	for _, s := range m.servers {
 		s.mu.Lock()
+		tools := make([]ToolStatus, 0, len(s.tools))
+		for _, t := range s.tools {
+			enabled := true
+			if s.toolEnabled != nil {
+				enabled = s.toolEnabled[t.Name]
+			}
+			tools = append(tools, ToolStatus{Name: t.Name, Enabled: enabled})
+		}
 		out = append(out, Status{
-			ID: s.ID, Name: s.Name, Enabled: true, Running: s.running, ToolCount: len(s.tools),
+			ID: s.ID, Name: s.Name, Enabled: true, Running: s.running,
+			ToolCount: len(tools), Tools: tools,
 		})
 		s.mu.Unlock()
 	}

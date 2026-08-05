@@ -193,6 +193,60 @@ func (c *Client) handle(msg WsMessage) error {
 		}
 		return c.sendJSON(WsMessage{Type: "mcp_toggle_ack", Payload: mustJSON(map[string]any{"id": p.ID, "ok": true, "enabled": p.Enabled})})
 
+	case "mcp_tool_toggle":
+		var p struct {
+			Server  string `json:"server"`
+			Tool    string `json:"tool"`
+			Enabled bool   `json:"enabled"`
+		}
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return err
+		}
+		err := c.kernel.MCPToolToggle(p.Server, p.Tool, p.Enabled)
+		return c.sendJSON(WsMessage{Type: "mcp_tool_toggle_ack", Payload: mustJSON(map[string]any{
+			"server": p.Server, "tool": p.Tool, "enabled": p.Enabled, "ok": err == nil,
+			"message": errMsg(err),
+		})})
+
+	case "mcp_market_list":
+		items := []map[string]any{}
+		if reg := c.kernel.MCPRegistry(); reg != nil {
+			for _, it := range reg.Servers {
+				installed := false
+				for _, s := range mcpInstalledIDs(c.kernel) {
+					if s == it.ID {
+						installed = true
+						break
+					}
+				}
+				items = append(items, map[string]any{
+					"id": it.ID, "name": it.Name, "description": it.Description,
+					"installed": installed,
+				})
+			}
+		}
+		return c.sendJSON(WsMessage{Type: "mcp_market_list_ack", Payload: mustJSON(map[string]any{"items": items})})
+
+	case "mcp_install":
+		var p struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return err
+		}
+		err := c.kernel.MCPInstall(p.ID)
+		return c.sendJSON(WsMessage{Type: "mcp_install_ack", Payload: mustJSON(map[string]any{"id": p.ID, "ok": err == nil, "message": errMsg(err)})})
+
+	case "mcp_uninstall":
+		var p struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return err
+		}
+		err := c.kernel.MCPUninstall(p.ID)
+		return c.sendJSON(WsMessage{Type: "mcp_uninstall_ack", Payload: mustJSON(map[string]any{"id": p.ID, "ok": err == nil, "message": errMsg(err)})})
+
 	default:
 		return nil
 	}
@@ -297,4 +351,20 @@ func (c *Client) shutdown() {
 func mustJSON(v any) json.RawMessage {
 	data, _ := json.Marshal(v)
 	return data
+}
+
+// mcpInstalledIDs 已安装的 MCP Server ID 列表
+func mcpInstalledIDs(k *kernel.Kernel) []string {
+	ids := make([]string, 0)
+	for _, s := range k.MCPStatus() {
+		ids = append(ids, s.ID)
+	}
+	return ids
+}
+
+func errMsg(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }

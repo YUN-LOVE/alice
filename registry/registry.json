@@ -1,4 +1,38 @@
 {
   "version": "1.0",
-  "servers": []
+  "servers": [
+    {
+      "id": "local",
+      "name": "本地工具",
+      "description": "内置工具：计算器（四则运算）、当前时间、文本回显",
+      "command": "../mcp-server/alice-local-tools"
+    },
+    {
+      "id": "vision",
+      "name": "视觉",
+      "description": "图像识别：描述本地图片或网络图片内容（需 ALICE_VISION_API_KEY）",
+      "command": "../mcp-vision/alice-vision-tools"
+    },
+    {
+      "id": "search",
+      "name": "搜索 (Tavily)",
+      "description": "网络搜索与网页提取，免费 1000 次/月（可配 TAVILY_API_KEY）",
+      "command": "npx",
+      "args": ["-y", "tavily-mcp"]
+    },
+    {
+      "id": "search-ddg",
+      "name": "搜索 (DuckDuckGo)",
+      "description": "免费网络搜索，无需任何 key（免费后端可能被反爬限流）",
+      "command": "npx",
+      "args": ["-y", "duckduckgo-mcp-server"]
+    },
+    {
+      "id": "search-brave",
+      "name": "搜索 (Brave)",
+      "description": "官方 Brave 搜索（需 BRAVE_API_KEY，注册需信用卡验证）",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"]
+    }
+  ]
 }

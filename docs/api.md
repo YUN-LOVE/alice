@@ -36,8 +36,10 @@ HTTP API:      http://host:port/api/v1/...
 | `mcp_configure` | `{...}` | 修改 MCP 配置 | 🚧 规划中 |
 | `mcp_installed_list` | — | 获取已安装 MCP 列表 | ✅ 已实现 |
 | `mcp_toggle` | `{ "id": "serverId", "enabled": true/false }` | 启用/禁用 MCP | ✅ 已实现 |
-| `mcp_install` | `{...}` | 安装 MCP | 🚧 规划中 |
-| `mcp_uninstall` | `{...}` | 卸载 MCP | 🚧 规划中 |
+| `mcp_tool_toggle` | `{ "server", "tool", "enabled" }` | 工具级启用/禁用（持久化） | ✅ 已实现 |
+| `mcp_market_list` | — | 获取 MCP 市场列表 | ✅ 已实现 |
+| `mcp_install` | `{ "id" }` | 安装 MCP（写入 mcp.yaml + 热重载） | ✅ 已实现 |
+| `mcp_uninstall` | `{ "id" }` | 卸载 MCP | ✅ 已实现 |
 | `mcp_configure` | `{...}` | 修改 MCP 配置 | 🚧 规划中 |
 
 ### 1.2 后端 → 前端
@@ -90,7 +92,8 @@ HTTP API:      http://host:port/api/v1/...
 | `/api/v1/memory/block/:id` | GET | 获取单条记忆详情 | ✅ 已实现 |
 | `/api/v1/memory/search` | POST | 搜索 RAG 历史（body: `{"query": "..."}`） | ✅ 已实现 |
 | `/api/v1/memory/export` | GET | 导出所有记忆（JSON 下载） | ✅ 已实现 |
-| `/api/v1/mcp/status` | GET | 已安装 MCP Server 状态 | ✅ 已实现 |
+| `/api/v1/mcp/status` | GET | 已安装 MCP Server 状态（含工具级开关） | ✅ 已实现 |
+| `/api/v1/mcp/market` | GET | MCP 市场可安装项列表 | ✅ 已实现 |
 | `/api/v1/history` | GET | 当天聊天记录（`?date=YYYY-MM-DD` 可选） | ✅ 已实现 |
 | `/api/v1/history/dates` | GET | 已归档日期列表 | ✅ 已实现 |
 

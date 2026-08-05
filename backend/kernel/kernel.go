@@ -30,6 +30,7 @@ type Kernel struct {
 	block       *memory.Block
 	engine      *emotion.Engine
 	mcp         *mcp.Manager
+	registry    *mcp.Registry
 	onProactive func(string)
 }
 
@@ -49,7 +50,15 @@ func NewKernel(cfg *config.Config) *Kernel {
 		rag:    rag,
 		block:  memory.NewBlock(cfg.Block.MaxEntries),
 		engine: buildEmotion(cfg),
-		mcp:    mcp.NewManager(cfg.MCP.AutoStart),
+		mcp:    mcp.NewManager(cfg.MCP.AutoStart, cfg.RAG.Redis.Addr, cfg.RAG.Redis.Password, cfg.RAG.Redis.DB),
+	}
+
+	// 加载 MCP 市场注册表（本地文件或远程 URL）
+	registryPath := resolveMCPCommand(cfg.BaseDir, cfg.MCP.Registry.File)
+	if reg, err := mcp.LoadRegistry(cfg.MCP.Registry.Source, registryPath); err != nil {
+		log.Printf("[kernel] 警告: MCP 注册表加载失败（市场不可用）: %v", err)
+	} else {
+		k.registry = reg
 	}
 
 	// 注册已配置的 MCP Server
@@ -534,3 +543,57 @@ func (k *Kernel) MCPStart(ctx context.Context, id string) error { return k.mcp.S
 
 // MCPStop 停止指定 MCP Server
 func (k *Kernel) MCPStop(id string) { k.mcp.Stop(id) }
+
+// MCPToolToggle 工具级启用/禁用
+func (k *Kernel) MCPToolToggle(serverID, toolName string, enabled bool) error {
+	return k.mcp.SetToolEnabled(serverID, toolName, enabled)
+}
+
+// MCPRegistry 返回 MCP 市场注册表
+func (k *Kernel) MCPRegistry() *mcp.Registry {
+	return k.registry
+}
+
+// MCPInstall 安装注册表中的 MCP：写入 mcp.yaml 并触发热重载
+func (k *Kernel) MCPInstall(id string) error {
+	if k.registry == nil {
+		return fmt.Errorf("注册表未加载")
+	}
+	item, ok := k.registry.Item(id)
+	if !ok {
+		return fmt.Errorf("注册表中不存在: %s", id)
+	}
+	// 已存在则忽略
+	for _, s := range k.cfg.MCP.Servers {
+		if s.ID == id {
+			return nil
+		}
+	}
+	servers := append(k.cfg.MCP.Servers, item.ToConfig())
+	if err := config.UpdateMCP(k.cfg.BaseDir, servers); err != nil {
+		return err
+	}
+	log.Printf("[mcp] 已安装: %s", id)
+	return nil
+}
+
+// MCPUninstall 卸载 MCP：从 mcp.yaml 移除并触发热重载
+func (k *Kernel) MCPUninstall(id string) error {
+	servers := make([]config.MCPServerConfig, 0, len(k.cfg.MCP.Servers))
+	removed := false
+	for _, s := range k.cfg.MCP.Servers {
+		if s.ID == id {
+			removed = true
+			continue
+		}
+		servers = append(servers, s)
+	}
+	if !removed {
+		return fmt.Errorf("未安装: %s", id)
+	}
+	if err := config.UpdateMCP(k.cfg.BaseDir, servers); err != nil {
+		return err
+	}
+	log.Printf("[mcp] 已卸载: %s", id)
+	return nil
+}

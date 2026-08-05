@@ -107,7 +107,7 @@ func TestManagerHTTP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	m := NewManager(true)
+	m := NewManager(true, "", "", 0)
 	m.Add("remote", "远程工具", config.MCPServerConfig{
 		Transport: "http",
 		URL:       srv.URL + "/mcp",
