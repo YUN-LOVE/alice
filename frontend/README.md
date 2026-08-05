@@ -5,10 +5,18 @@
 ## 开发
 
 ```bash
-npm install
-npm run dev        # http://localhost:4321
-npm run build      # 构建产物在 dist/
+pnpm install
+pnpm dev        # http://localhost:4321（监听 0.0.0.0，局域网可访问）
+pnpm build      # 构建产物在 dist/
 ```
+
+## 功能
+
+- 对话：流式输出、发送状态、历史聊天记录加载（当天）
+- **Markdown 渲染**：消息按 GFM 渲染（marked + DOMPurify 防 XSS），流式中保持纯文本
+- 侧边面板：记忆查看（Block 列表 + RAG 搜索）、MCP 管理（工具级开关）/ 市场（安装/卸载）、情绪可视化
+- 主题切换：暗色 / 亮色（localStorage 持久化）
+- 设置：后端地址配置（运行时切换）
 
 ## 配置后端地址
 
@@ -26,11 +34,17 @@ WebSocket 地址由后端地址自动推导：`http://…` → `ws://…/ws`。
 src/
 ├── components/
 │   ├── chat/        # 对话（消息列表 / 输入框 / 根组件）
-│   └── settings/    # 设置面板（后端地址）
+│   ├── settings/    # 设置面板（后端地址）
+│   ├── panel/       # 侧边面板容器（记忆/MCP/情绪 tab）
+│   ├── memory/      # 记忆查看面板
+│   ├── mcp/         # MCP 管理 + 市场面板
+│   └── emotion/     # 情绪可视化面板
 ├── services/
 │   ├── ws.ts        # WebSocket 封装（自动重连）
-│   └── backend.ts   # 后端地址解析
-├── stores/          # Pinia（chat store）
+│   ├── backend.ts   # 后端地址解析
+│   ├── api.ts       # HTTP API 封装（记忆/MCP/历史）
+│   └── markdown.ts  # Markdown 渲染 + XSS 净化
+├── stores/          # Pinia（chat / mcp / memory）
 └── pages/           # Astro 页面
 ```
 

@@ -27,19 +27,14 @@ HTTP API:      http://host:port/api/v1/...
 | `handshake` | `{ "session_id": "可选" }` | 握手；绑定会话 | ✅ 已实现 |
 | `user_message` | `{ "text": "内容", "session_id": "可选" }` | 发送文本消息 | ✅ 已实现 |
 | `ping` | — | 心跳 | ✅ 已实现 |
-| `upload_chunk` | Binary Frame | 上传文件分块 | 🚧 规划中 |
-| `settings_update` | `{...}` | 修改配置 | 🚧 规划中 |
-| `mcp_market_list` | — | 获取 MCP 市场列表 | 🚧 规划中 |
-| `mcp_install` | `{...}` | 安装 MCP | 🚧 规划中 |
-| `mcp_uninstall` | `{...}` | 卸载 MCP | 🚧 规划中 |
-| `mcp_toggle` | `{...}` | 启用/禁用 MCP | 🚧 规划中 |
-| `mcp_configure` | `{...}` | 修改 MCP 配置 | 🚧 规划中 |
 | `mcp_installed_list` | — | 获取已安装 MCP 列表 | ✅ 已实现 |
 | `mcp_toggle` | `{ "id": "serverId", "enabled": true/false }` | 启用/禁用 MCP | ✅ 已实现 |
 | `mcp_tool_toggle` | `{ "server", "tool", "enabled" }` | 工具级启用/禁用（持久化） | ✅ 已实现 |
 | `mcp_market_list` | — | 获取 MCP 市场列表 | ✅ 已实现 |
 | `mcp_install` | `{ "id" }` | 安装 MCP（写入 mcp.yaml + 热重载） | ✅ 已实现 |
 | `mcp_uninstall` | `{ "id" }` | 卸载 MCP | ✅ 已实现 |
+| `upload_chunk` | Binary Frame | 上传文件分块 | 🚧 规划中 |
+| `settings_update` | `{...}` | 修改配置 | 🚧 规划中 |
 | `mcp_configure` | `{...}` | 修改 MCP 配置 | 🚧 规划中 |
 
 ### 1.2 后端 → 前端
@@ -51,13 +46,16 @@ HTTP API:      http://host:port/api/v1/...
 | `pong` | `{ "time" }` | 心跳回复 | ✅ 已实现 |
 | `error` | `{ "message" }` | 错误 | ✅ 已实现 |
 | `assistant_audio` | `{...}` | 回复音频（TTS） | 🚧 规划中 |
-| `proactive_message` | `{ "text" }` | 主动推送（情绪超阈值触发） | ✅ 已实现 |
+| `proactive_message` | `{ "text" }` | 主动推送（情绪超阈值，LLM 生成 + 存入记忆） | ✅ 已实现 |
 | `emotion_update` | `{ "state", "description", "top" }` | 情绪状态更新（回复结束时推送） | ✅ 已实现 |
 | `mcp_capabilities` | `{...}` | MCP 能力更新 | 🚧 规划中 |
 | `settings_update_ack` | `{...}` | 配置修改确认 | 🚧 规划中 |
 | `mcp_installed_list_ack` | `{ "servers": [...] }` | 已安装列表确认 | ✅ 已实现 |
 | `mcp_toggle_ack` | `{ "id", "ok", "enabled" }` | 启用/禁用确认 | ✅ 已实现 |
-| `mcp_*_ack` | `{...}` | MCP 操作确认 | ✅ 已实现 |
+| `mcp_tool_toggle_ack` | `{ "server", "tool", "enabled", "ok" }` | 工具开关确认 | ✅ 已实现 |
+| `mcp_market_list_ack` | `{ "items": [...] }` | 市场列表确认 | ✅ 已实现 |
+| `mcp_install_ack` | `{ "id", "ok", "message" }` | 安装确认 | ✅ 已实现 |
+| `mcp_uninstall_ack` | `{ "id", "ok", "message" }` | 卸载确认 | ✅ 已实现 |
 
 ### 1.3 示例：完整对话流程
 
@@ -76,9 +74,8 @@ HTTP API:      http://host:port/api/v1/...
 
 ### 1.4 会话说明
 
-- 客户端可在握手或每次 `user_message` 中携带 `session_id` 绑定会话
-- 不携带则归入默认会话 `"default"`
-- 不同 `session_id` 的上下文完全隔离（多端互不干扰）
+- `session_id` 保留在协议层（多端可各自持有），但 Alice 的记忆/情绪/历史是**全局统一**的——私人部署，任何端看到的都是同一份
+- 不携带 `session_id` 同样正常使用（归入默认会话）
 - 后端会发送心跳 Ping（约 54s），客户端无需处理，但应响应 Pong 帧或保持活跃
 
 ---
@@ -101,8 +98,19 @@ HTTP API:      http://host:port/api/v1/...
 ### `GET /api/v1/health`
 
 ```json
-{ "status": "ok", "llm": "deepseek-chat (mock)" }
+{ "status": "ok", "llm": "deepseek-chat (mock)", "embedding": "BAAI/bge-m3 (hash)", "memory": 42 }
 ```
+
+### 主动推送（`proactive_message`）
+
+情绪超阈值时触发，机制：
+- 话术由 **LLM 根据当前情绪实时生成**（非静态模板）
+- 生成的主动消息会**存入 RAG + Memory Block**（Alice 记得自己主动说过什么）
+- 用户超过 `silent_after_minutes`（默认 30 分钟）无互动 → 触发失落/焦虑上升 + 主动问候
+- `hours` 限制推送时段（默认 8–23 点），避免深夜打扰
+- 推送间有 `cooldown_seconds` 冷却，防止打扰
+
+情绪显著事件（变化量 > 0.1）记录到 Redis，可通过 `GET /api/v1/emotion/events` 查询历史轨迹。
 
 ---
 

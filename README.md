@@ -90,15 +90,33 @@ export ALICE_VISION_MODEL=Qwen/Qwen2.5-VL-72B-Instruct   # 可选，默认如上
 
 每轮对话按时间戳存入 RAG 并打**日期 tag**。前端页面加载时显示**当天的聊天记录**；每天零点自动整理归档（前一天对话归入长期记忆）。没有会话概念——Alice 只有全局一份记忆，私人部署，任何端看到的都是同一份。
 
+## 情绪与主动推送
+
+情绪引擎完整实现设计文档的三大机制：
+
+- **事件驱动**：`emotion_events.yaml` 关键词 → 事件 → 情绪向量变化
+- **时间演化**：指数衰减趋近 baseline + **关系矩阵**（`emotion.yaml` 的 `relations`：漂移/拮抗，如焦虑抑制开心）
+- **主动推送**：情绪超阈值 → **LLM 根据当前情绪生成自然的关心话**（非静态模板）→ 存入 RAG + Block（Alice 记得自己主动说过什么）→ 广播到所有连接
+  - `silent_after_minutes`：用户超过该时长无互动，触发失落/焦虑上升 + 主动问候
+  - `hours`：允许推送的时段（默认 8–23 点，不深夜打扰）
+  - 显著情绪事件记录到 Redis，`GET /api/v1/emotion/events` 可查情绪历史轨迹
+
+## 前端
+
+- 对话消息按 **Markdown 渲染**（标题/列表/代码块/表格/链接），DOMPurify 防 XSS
+- 侧边面板：记忆查看 / MCP 管理（工具级开关）/ 情绪可视化
+- 主题切换：暗色 / 亮色
+- 历史记录：页面刷新自动恢复当天聊天
+
 ```
 config/
 ├── main.yaml              # 服务端口、日志
 ├── kernel.yaml            # LLM、上下文
-├── emotion.yaml           # 情绪引擎（阶段三）
-├── emotion_events.yaml    # 事件→情绪映射（阶段三）
+├── emotion.yaml           # 情绪引擎（维度/关系矩阵/衰减/主动推送参数）
+├── emotion_events.yaml    # 事件→情绪映射（关键词触发）
 ├── memory_rag.yaml        # RAG（阶段二）
 ├── memory_block.yaml      # Memory Block（阶段二）
-├── mcp.yaml               # MCP（阶段四）
+├── mcp.yaml               # MCP（servers / 注册表 / 传输方式）
 └── prompts/
     ├── system_prompt.txt  # Alice 人格底座
     └── emotion_templates.yaml
@@ -115,23 +133,29 @@ config/
 | 阶段四 | MCP 层：stdio 协议客户端、生命周期管理、Function Calling 循环、内置工具 | ✅ 完成 |
 | 阶段四+ | Vision：视觉 MCP Server（describe_image，帮 Alice "看"图片） | ✅ 完成 |
 | 阶段四++ | MCP 市场：注册表 + 安装/卸载 + 工具级开关（可单独决定用哪个工具） | ✅ 完成 |
-| 阶段五 | 前端补全：侧边面板（记忆查看 / MCP 管理 / 情绪可视化）、主题切换 | ✅ 完成 |
+| 阶段五 | 前端补全：侧边面板（记忆查看 / MCP 管理 / 情绪可视化）、主题切换、Markdown 渲染 | ✅ 完成 |
+| Kernel+ | 主动推送增强（LLM 生成 + 存记忆 + silent 触发 + 时段）、情绪记忆、关系矩阵 | ✅ 完成 |
 
 ## 目录结构
 
 ```
 alice/
 ├── backend/            # Go 后端（纯 API）
-│   ├── kernel/         # 对话核心 + LLM Client
+│   ├── kernel/         # 对话核心 + LLM Client + 主动推送
+│   ├── emotion/        # 情绪引擎（向量/关系矩阵/事件记录）
+│   ├── memory/         # 记忆系统（RAG + Memory Block）
+│   ├── mcp/            # MCP 管理（stdio/HTTP 客户端、市场、注册表）
 │   ├── server/         # WebSocket / HTTP / CORS
-│   └── config/         # YAML 加载
+│   └── config/         # YAML 加载 + 热重载
 ├── frontend/           # Astro + Vue3 + Pinia + Tailwind
-│   ├── src/components/ # chat / settings / (emotion, memory, mcp 待建)
-│   ├── src/services/   # WebSocket、后端地址解析
-│   └── src/stores/     # Pinia
+│   ├── src/components/ # chat / settings / panel / memory / mcp / emotion
+│   ├── src/services/   # WebSocket、后端地址解析、API、Markdown 渲染
+│   └── src/stores/     # Pinia（chat / mcp / memory）
 ├── config/             # 配置文件 + prompts
 ├── docs/               # 文档（API 等）
-└── registry/           # MCP 注册表缓存（阶段四）
+├── mcp-server/         # 内置 MCP：计算器/时间/回显
+├── mcp-vision/         # 视觉 MCP Server
+└── registry/           # MCP 市场注册表
 ```
 
 ## 文档
