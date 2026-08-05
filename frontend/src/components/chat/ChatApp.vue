@@ -38,10 +38,12 @@ onUnmounted(() => unwatch?.())
 </script>
 
 <template>
-  <div class="relative flex h-screen flex-col bg-zinc-950 text-zinc-100">
+  <div class="m3-surface relative flex h-screen flex-col">
     <!-- 顶部栏 -->
-    <header class="flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
-      <div class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-sm font-bold">
+    <header class="m3-surface-container-low flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
+      <div
+        class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-base font-bold m3-on-primary shadow-lg"
+      >
         A
       </div>
       <div class="flex-1">
@@ -51,37 +53,37 @@ onUnmounted(() => unwatch?.())
             class="inline-block h-2 w-2 rounded-full"
             :class="chat.connected ? 'bg-emerald-400' : 'bg-red-500'"
           />
-          <span class="text-xs text-zinc-500">
+          <span class="text-xs m3-on-surface-variant">
             {{ chat.serverInfo?.llm ?? '连接中...' }}
           </span>
         </div>
       </div>
       <button
-        class="rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+        class="rounded-full px-3.5 py-1.5 text-sm m3-on-surface-variant hover:bg-zinc-800"
         @click="openPanel('memory')"
       >
         记忆
       </button>
       <button
-        class="rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+        class="rounded-full px-3.5 py-1.5 text-sm m3-on-surface-variant hover:bg-zinc-800"
         @click="openPanel('mcp')"
       >
         MCP
       </button>
       <button
-        class="rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+        class="rounded-full px-3.5 py-1.5 text-sm m3-on-surface-variant hover:bg-zinc-800"
         @click="openPanel('emotion')"
       >
         情绪
       </button>
       <button
-        class="rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+        class="rounded-full px-3.5 py-1.5 text-sm m3-on-surface-variant hover:bg-zinc-800"
         @click="chat.settingsOpen = true"
       >
         设置
       </button>
       <button
-        class="rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+        class="rounded-full px-3 py-1.5 text-sm m3-on-surface-variant hover:bg-zinc-800"
         @click="chat.toggleTheme()"
       >
         {{ chat.theme === 'dark' ? '☀️' : '🌙' }}
@@ -94,10 +96,10 @@ onUnmounted(() => unwatch?.())
     </main>
 
     <!-- 输入区 -->
-    <footer class="border-t border-zinc-800 px-4 py-3">
+    <footer class="m3-surface-container-low border-t border-zinc-800 px-4 py-3">
       <MessageInput />
       <!-- 底部状态栏 -->
-      <div class="mt-2 flex gap-4 text-xs text-zinc-500">
+      <div class="mt-2 flex gap-4 text-xs m3-on-surface-variant">
         <span>😊 {{ chat.emotion.top || '平静' }}</span>
         <span>💾 记忆: {{ chat.memoryCount }} 条</span>
         <span>🔌 MCP: {{ mcp.servers.filter((s) => s.running).length }} 个运行中</span>

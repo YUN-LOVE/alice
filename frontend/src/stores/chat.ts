@@ -2,6 +2,13 @@ import { defineStore, createPinia, setActivePinia } from 'pinia'
 import { ws } from '../services/ws'
 import { ensureConfig, getBackendUrl, setBackendUrl, wsUrl, httpBase } from '../services/backend'
 import { getHistory, getProactiveEnabled, setProactiveEnabled } from '../services/api'
+import {
+  getSavedTheme,
+  saveTheme,
+  applyThemeFromSeed,
+  applyThemeFromImage,
+  type ThemeState,
+} from '../styles/theme'
 
 export interface ChatMessage {
   id: number
@@ -28,6 +35,7 @@ export const useChatStore = defineStore('chat', {
     panelOpen: false,
     panelTab: 'memory' as 'memory' | 'mcp' | 'emotion',
     theme: 'dark' as 'dark' | 'light',
+    seedColor: '#7c5cff',
     initialized: false,
     emotion: {
       top: '',
@@ -43,11 +51,10 @@ export const useChatStore = defineStore('chat', {
       await ensureConfig()
       this.backendUrl = getBackendUrl()
 
-      // 恢复主题
-      const savedTheme = localStorage.getItem('alice.theme')
-      if (savedTheme === 'light' || savedTheme === 'dark') {
-        this.theme = savedTheme
-      }
+      // 恢复主题（M3）
+      const savedTheme = getSavedTheme()
+      this.theme = savedTheme.mode
+      this.seedColor = savedTheme.seed
       this.applyTheme()
 
       ws.on('$open', () => {
@@ -172,12 +179,31 @@ export const useChatStore = defineStore('chat', {
 
     toggleTheme() {
       this.theme = this.theme === 'dark' ? 'light' : 'dark'
-      localStorage.setItem('alice.theme', this.theme)
       this.applyTheme()
     },
 
+    /** 应用 M3 主题：seed color → tonal palette → CSS 变量 */
     applyTheme() {
+      applyThemeFromSeed(this.seedColor, this.theme)
       document.documentElement.classList.toggle('light', this.theme === 'light')
+      document.body.style.background = 'var(--md-sys-color-surface)'
+      saveTheme({ seed: this.seedColor, mode: this.theme })
+    },
+
+    /** 设置种子色（手动选色） */
+    setSeedColor(seed: string) {
+      this.seedColor = seed
+      this.applyTheme()
+    },
+
+    /** 从壁纸图片取色生成主题（Monet），返回提取的种子色 */
+    async applyWallpaper(source: string | HTMLImageElement): Promise<string> {
+      const seed = await applyThemeFromImage(source, this.theme)
+      this.seedColor = seed
+      document.documentElement.classList.toggle('light', this.theme === 'light')
+      document.body.style.background = 'var(--md-sys-color-surface)'
+      saveTheme({ seed, mode: this.theme })
+      return seed
     },
 
     reset() {

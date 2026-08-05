@@ -1,19 +1,60 @@
 @import "tailwindcss";
 
-/* 亮色主题：通过覆盖 Tailwind 的 zinc 调色板变量实现，
-   所有使用 zinc-* 类的组件自动切换，无需逐处修改 */
-html.light {
-  --color-zinc-950: oklch(0.985 0 0);
-  --color-zinc-900: oklch(0.97 0 0);
-  --color-zinc-800: oklch(0.9 0 0);
-  --color-zinc-700: oklch(0.8 0 0);
-  --color-zinc-600: oklch(0.45 0 0);
-  --color-zinc-500: oklch(0.5 0 0);
-  --color-zinc-400: oklch(0.45 0 0);
-  --color-zinc-300: oklch(0.4 0 0);
-  --color-zinc-200: oklch(0.3 0 0);
-  --color-zinc-100: oklch(0.2 0 0);
-  --color-zinc-50: oklch(0.15 0 0);
+/* ===== Material You 动态主题 =====
+   主题色由 src/styles/theme.ts 运行时生成并写入 --md-sys-color-* 与 --color-zinc-* 内联变量，
+   因此本文件不再硬编码配色。首次渲染前使用 Tailwind 默认值，挂载后立即应用 M3 主题。 */
+
+/* M3 语义工具类（Expressive：surface 层次 + 容器色 + 大圆角） */
+.m3-surface {
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+}
+.m3-surface-container {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+}
+.m3-surface-container-low {
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+}
+.m3-surface-container-high {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+}
+.m3-surface-container-highest {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+.m3-primary {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+.m3-primary-container {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+.m3-secondary-container {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.m3-tertiary {
+  background: var(--md-sys-color-tertiary);
+  color: var(--md-sys-color-on-tertiary);
+}
+.m3-on-primary {
+  color: var(--md-sys-color-on-primary);
+}
+.m3-on-surface-variant {
+  color: var(--md-sys-color-on-surface-variant);
+}
+.m3-outline-variant {
+  border-color: var(--md-sys-color-outline-variant);
+}
+.m3-radius-lg {
+  border-radius: 16px;
+}
+.m3-radius-xl {
+  border-radius: 24px;
 }
 
 /* ==================== Markdown 内容渲染 ==================== */

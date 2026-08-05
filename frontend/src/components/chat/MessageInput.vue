@@ -23,8 +23,8 @@ function onKeydown(e: KeyboardEvent) {
 <template>
   <div class="flex items-end gap-2">
     <button
-      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg text-zinc-400 hover:bg-zinc-800"
-      title="语音输入（阶段二上线）"
+      class="m3-surface-container-highest flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg m3-on-surface-variant transition hover:opacity-80"
+      title="语音输入（开发中）"
       disabled
     >
       🎤
@@ -33,11 +33,11 @@ function onKeydown(e: KeyboardEvent) {
       v-model="text"
       rows="1"
       placeholder="和 Alice 聊聊..."
-      class="max-h-32 flex-1 resize-none rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:border-purple-500 focus:outline-none"
+      class="m3-surface-container-highest max-h-32 flex-1 resize-none rounded-[20px] border border-zinc-700 px-4 py-3 text-sm m3-on-surface-variant placeholder-zinc-500 focus:border-purple-500 focus:outline-none"
       @keydown="onKeydown"
     />
     <button
-      class="h-10 shrink-0 rounded-xl bg-purple-600 px-5 text-sm font-medium text-white transition hover:bg-purple-500 disabled:opacity-40"
+      class="m3-primary h-11 shrink-0 rounded-full px-5 text-sm font-medium shadow-lg transition hover:opacity-90 disabled:opacity-40"
       :disabled="!text.trim() || chat.sending"
       @click="send"
     >

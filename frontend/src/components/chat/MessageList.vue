@@ -30,23 +30,23 @@ function formatTime(ts?: number): string {
     >
       <div
         v-if="m.role === 'assistant'"
-        class="mr-2 flex h-7 w-7 shrink-0 items-center justify-center self-end rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-xs font-bold"
+        class="mr-2 flex h-8 w-8 shrink-0 items-center justify-center self-end rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-sm font-bold m3-on-primary"
       >
         A
       </div>
       <div class="flex max-w-[75%] flex-col" :class="m.role === 'user' ? 'items-end' : 'items-start'">
         <div
-          class="rounded-2xl px-4 py-2 text-sm leading-relaxed"
+          class="px-4 py-2.5 text-sm leading-relaxed"
           :class="
             m.role === 'user'
-              ? 'rounded-br-sm bg-purple-600 text-white'
-              : 'rounded-bl-sm bg-zinc-800 text-zinc-100'
+              ? 'm3-primary rounded-[24px] rounded-br-[6px]'
+              : 'm3-surface-container-highest rounded-[24px] rounded-bl-[6px]'
           "
         >
           <!-- 流式中的消息：纯文本保持流畅；完成后渲染 Markdown -->
           <template v-if="m.streaming">
             <span class="whitespace-pre-wrap">{{ m.content }}</span>
-            <span v-if="!m.content" class="text-zinc-400">正在输入...</span>
+            <span v-if="!m.content" class="opacity-50">正在输入...</span>
             <span
               v-if="m.content"
               class="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-zinc-400 align-middle"
@@ -58,7 +58,7 @@ function formatTime(ts?: number): string {
             v-html="renderMarkdown(m.content)"
           />
         </div>
-        <span v-if="m.time" class="mt-0.5 px-1 text-[10px] text-zinc-500">{{ formatTime(m.time) }}</span>
+        <span v-if="m.time" class="mt-0.5 px-1 text-[10px] m3-on-surface-variant">{{ formatTime(m.time) }}</span>
       </div>
     </div>
   </div>

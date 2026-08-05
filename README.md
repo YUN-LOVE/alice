@@ -103,9 +103,10 @@ export ALICE_VISION_MODEL=Qwen/Qwen2.5-VL-72B-Instruct   # 可选，默认如上
 
 ## 前端
 
+- **Material You 动态主题**：Monet 取色引擎（`@material/material-color-utilities`），从壁纸图片提取主色生成整套 M3 tonal 配色，亮/暗模式，持久化到本地
+  - 设置面板 →「外观」→「从壁纸取色」上传图片即自动生成主题；也可点预设色板
 - 对话消息按 **Markdown 渲染**（标题/列表/代码块/表格/链接），DOMPurify 防 XSS
 - 侧边面板：记忆查看 / MCP 管理（工具级开关）/ 情绪可视化
-- 主题切换：暗色 / 亮色
 - 历史记录：页面刷新自动恢复当天聊天
 
 ```

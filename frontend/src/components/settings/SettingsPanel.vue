@@ -7,6 +7,41 @@ const chat = useChatStore()
 const url = ref(chat.backendUrl)
 const saved = ref(false)
 const connecting = ref(false)
+const wallpaperInfo = ref('')
+
+// Material You 预设种子色
+const presets = [
+  '#7c5cff', // 动态紫（默认）
+  '#6750a4', // 经典紫
+  '#00639a', // 蓝
+  '#006c5c', // 绿
+  '#c0004b', // 玫红
+  '#d24c00', // 橙
+  '#6a9b00', // 黄绿
+  '#9a3400', // 赭石
+  '#3f3f3f', // 中性
+  '#7c6b00', // 橄榄
+]
+
+function onWallpaperFile(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  wallpaperInfo.value = '正在取色...'
+  const reader = new FileReader()
+  reader.onload = async () => {
+    const img = new Image()
+    img.onload = async () => {
+      try {
+        const seed = await chat.applyWallpaper(img)
+        wallpaperInfo.value = `已从壁纸取色：#${seed.slice(1)}`
+      } catch {
+        wallpaperInfo.value = '取色失败，请换一张图片'
+      }
+    }
+    img.src = reader.result as string
+  }
+  reader.readAsDataURL(file)
+}
 
 async function save() {
   saved.value = false
@@ -75,6 +110,42 @@ function useDefault() {
           <span class="text-zinc-500">版本</span>
           <span class="text-zinc-300">{{ chat.serverInfo.version }}</span>
         </div>
+      </div>
+
+      <!-- 外观：Material You 取色 -->
+      <div class="mt-4">
+        <label class="text-xs m3-on-surface-variant">外观（Material You 取色）</label>
+
+        <!-- 壁纸取色 -->
+        <div class="mt-1.5 flex items-center gap-2">
+          <label
+            class="m3-primary-container flex-1 cursor-pointer rounded-full px-4 py-2 text-center text-xs"
+          >
+            从壁纸取色
+            <input type="file" accept="image/*" class="hidden" @change="onWallpaperFile" />
+          </label>
+          <div
+            class="h-8 w-8 rounded-full border border-zinc-700"
+            :style="{ background: chat.seedColor }"
+            title="当前种子色"
+          />
+        </div>
+        <p v-if="wallpaperInfo" class="mt-1 text-[10px] text-emerald-400">{{ wallpaperInfo }}</p>
+
+        <!-- 预设色板 -->
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          <button
+            v-for="c in presets"
+            :key="c"
+            class="h-6 w-6 rounded-full border transition hover:scale-110"
+            :class="chat.seedColor === c ? 'ring-2 ring-zinc-300' : 'border-zinc-600'"
+            :style="{ background: c }"
+            @click="chat.setSeedColor(c)"
+          />
+        </div>
+        <p class="mt-1 text-[10px] m3-on-surface-variant">
+          动态取色会提取壁纸主色生成整套配色，刷新后保留。
+        </p>
       </div>
 
       <div class="mt-5 flex justify-end gap-2">

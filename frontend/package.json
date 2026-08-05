@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@astrojs/vue": "^7.0.1",
+    "@material/material-color-utilities": "^0.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.1.6",
     "dompurify": "^3.4.13",

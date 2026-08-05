@@ -36,21 +36,21 @@ watch(
   >
     <aside
       v-if="chat.panelOpen"
-      class="absolute bottom-0 right-0 top-14 z-40 flex w-[340px] flex-col border-l border-zinc-800 bg-zinc-900"
+      class="m3-surface-container absolute bottom-0 right-0 top-14 z-40 flex w-[340px] flex-col border-l border-zinc-800"
     >
       <div class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
         <div class="flex gap-1">
           <button
             v-for="t in tabs"
             :key="t.id"
-            class="rounded-lg px-3 py-1.5 text-sm"
-            :class="chat.panelTab === t.id ? 'bg-purple-600 text-white' : 'text-zinc-400 hover:bg-zinc-800'"
+            class="rounded-full px-3 py-1.5 text-sm transition"
+            :class="chat.panelTab === t.id ? 'm3-secondary-container' : 'm3-on-surface-variant hover:opacity-80'"
             @click="chat.panelTab = t.id"
           >
             {{ t.label }}
           </button>
         </div>
-        <button class="text-zinc-500 hover:text-zinc-200" @click="chat.panelOpen = false">✕</button>
+        <button class="m3-on-surface-variant hover:opacity-80" @click="chat.panelOpen = false">✕</button>
       </div>
 
       <div class="flex-1 overflow-y-auto p-4">
