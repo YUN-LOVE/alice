@@ -96,15 +96,19 @@ export ALICE_VISION_MODEL=Qwen/Qwen2.5-VL-72B-Instruct   # 可选，默认如上
 
 - **事件驱动**：`emotion_events.yaml` 关键词 → 事件 → 情绪向量变化
 - **时间演化**：指数衰减趋近 baseline + **关系矩阵**（`emotion.yaml` 的 `relations`：漂移/拮抗，如焦虑抑制开心）
-- **主动推送**：情绪超阈值 → **LLM 根据当前情绪生成自然的关心话**（非静态模板）→ 存入 RAG + Block（Alice 记得自己主动说过什么）→ 广播到所有连接
+- **主动推送**：情绪超阈值 → **LLM 根据当前情绪生成自然的关心话**（提示词模板在 `config/prompts/proactive_prompt.txt`）→ 存入 RAG + Block（Alice 记得自己主动说过什么）→ 广播到所有连接
   - `silent_after_minutes`：用户超过该时长无互动，触发失落/焦虑上升 + 主动问候
+  - `skip_if_active_minutes`：用户最近互动过则跳过（聊天中不打扰）
   - `hours`：允许推送的时段（默认 8–23 点，不深夜打扰）
+  - **mock 模式（未配 key）自动跳过主动推送**
   - 显著情绪事件记录到 Redis，`GET /api/v1/emotion/events` 可查情绪历史轨迹
 
 ## 前端
 
-- **Material You 动态主题**：Monet 取色引擎（`@material/material-color-utilities`），从壁纸图片提取主色生成整套 M3 tonal 配色，亮/暗模式，持久化到本地
-  - 设置面板 →「外观」→「从壁纸取色」上传图片即自动生成主题；也可点预设色板
+- **Material You 动态主题**：Monet 取色引擎生成 M3 完整色阶（5 层 surface 渐变）
+  - **9 种取色算法**：经典 / 表现 / 活力 / 单色 / 中性 / 忠实 / 彩虹 / 果昔 / 内容（`@material/material-color-utilities`）
+  - **壁纸取色**：设置面板「外观」→「从壁纸取色」上传图片即自动生成主题（优先提取高饱和主色，自动提亮提彩兜底）
+  - 预设色板 + 亮/暗模式，持久化到本地
 - 对话消息按 **Markdown 渲染**（标题/列表/代码块/表格/链接），DOMPurify 防 XSS
 - 侧边面板：记忆查看 / MCP 管理（工具级开关）/ 情绪可视化
 - 历史记录：页面刷新自动恢复当天聊天
