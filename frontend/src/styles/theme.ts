@@ -12,7 +12,6 @@ import {
   Hct,
   hexFromArgb,
   argbFromHex,
-  sourceColorFromImage,
   type DynamicScheme,
 } from '@material/material-color-utilities'
 
@@ -92,9 +91,55 @@ export async function applyThemeFromImage(
   style: ThemeStyle,
   mode: 'dark' | 'light'
 ): Promise<string> {
-  const seed = sourceColorFromImage(image)
+  const seed = ensureViableSeed(extractSeedFromImage(image))
   applyTheme(buildScheme(seed, style, mode === 'dark'), mode)
   return hexFromArgb(seed)
+}
+
+// 从图片提取主色：优先选"出现最多的高饱和色"（避免选中黑白灰），
+// 全图无饱和色时退回平均色（再由 ensureViableSeed 提彩）。
+// 不用库的 sourceColorFromImage——它对极简/纯色图会返回黑色。
+function extractSeedFromImage(image: string | HTMLImageElement): number {
+  const img =
+    typeof image === 'string' ? ((document.createElement('img').src = image), document.createElement('img')) : image
+  const canvas = document.createElement('canvas')
+  const size = 32
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+  ctx.drawImage(img, 0, 0, size, size)
+  const data = ctx.getImageData(0, 0, size, size).data
+
+  const buckets = new Map<string, { count: number; r: number; g: number; b: number }>()
+  let best: { count: number; r: number; g: number; b: number } = { count: 0, r: 0, g: 0, b: 0 }
+  let sumR = 0, sumG = 0, sumB = 0, n = 0
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3]
+    if (a < 128) continue
+    sumR += r; sumG += g; sumB += b; n++
+    const chroma = Math.max(r, g, b) - Math.min(r, g, b)
+    if (chroma < 24) continue // 跳过灰/黑白
+    const key = `${r >> 4},${g >> 4},${b >> 4}`
+    const cur = buckets.get(key) ?? { count: 0, r, g, b }
+    cur.count++
+    buckets.set(key, cur)
+    if (cur.count > best.count) best = cur
+  }
+  if (best.count > 0) return (best.r << 16) | (best.g << 8) | best.b
+  if (n > 0) return Math.round(sumR / n) << 16 | (Math.round(sumG / n) << 8) | Math.round(sumB / n)
+  return argbFromHex(DEFAULT_SEED)
+}
+
+// 校验/修正种子色：太暗、太灰（无彩色）时提亮提彩，
+// 避免纯黑/纯白 seed 因色相未定义而生成刺眼或诡异的主题
+function ensureViableSeed(seed: number): number {
+  const hct = Hct.fromInt(seed)
+  // 彩度太低 → 提升到可辨识范围
+  if (hct.chroma < 24) hct.chroma = 48
+  // 明度过暗/过亮 → 拉回正常范围
+  if (hct.tone < 20) hct.tone = 45
+  if (hct.tone > 80) hct.tone = 65
+  return hct.toInt()
 }
 
 // DynamicScheme → CSS 变量

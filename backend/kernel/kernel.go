@@ -304,6 +304,12 @@ func (k *Kernel) proactiveAllowedNow() bool {
 
 // generateProactive 由 LLM 根据当前情绪生成主动关心的话术（提示词模板在 prompts/proactive_prompt.txt）
 func (k *Kernel) generateProactive() string {
+	// mock 模式（未配 key）不做主动推送——复读式话术只会打扰用户
+	if strings.Contains(k.llm.Name(), "(mock)") {
+		log.Printf("[kernel] mock 模式，跳过主动推送")
+		return ""
+	}
+
 	desc, _, _ := k.engine.Summary()
 	prompt := k.cfg.Emotion.ProactivePrompt
 	if prompt == "" {
@@ -326,7 +332,14 @@ func (k *Kernel) generateProactive() string {
 	for c := range ch {
 		sb.WriteString(c.Content)
 	}
-	return strings.TrimSpace(sb.String())
+	text := strings.TrimSpace(sb.String())
+
+	// 兜底：输出复读了提示词原文（异常），丢弃
+	if strings.Contains(text, "你现在想主动联系用户说句话") || strings.Contains(text, "{emotion}") {
+		log.Printf("[kernel] 主动推送输出异常（复读提示词），丢弃: %s", truncateStr(text, 40))
+		return ""
+	}
+	return text
 }
 
 // storeProactive 主动推送消息存入 RAG + Block（Alice 记得自己主动说过什么）
