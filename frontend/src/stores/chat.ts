@@ -39,6 +39,7 @@ export const useChatStore = defineStore('chat', {
     seedColor: '#7c5cff',
     themeStyle: 'tonal-spot' as ThemeStyle,
     initialized: false,
+    historyLoaded: false,
     emotion: {
       top: '',
       state: {} as Record<string, number>,
@@ -62,6 +63,10 @@ export const useChatStore = defineStore('chat', {
 
       ws.on('$open', () => {
         this.connected = true
+        // 后端就绪后自动补拉历史（仅限页面刚加载、列表为空时，避免覆盖会话中消息）
+        if (!this.historyLoaded && this.messages.length === 0) {
+          void this.loadHistory()
+        }
       })
       ws.on('$close', () => {
         this.connected = false
@@ -131,9 +136,14 @@ export const useChatStore = defineStore('chat', {
 
     /** 加载当天历史聊天记录（零点后归档到 RAG，前端只展示当天） */
     async loadHistory() {
+      if (this.historyLoaded) return
       try {
+        await ensureConfig()
         const data = await getHistory()
-        if (!data.messages.length) return
+        if (!data.messages.length) {
+          this.historyLoaded = true
+          return
+        }
         const historyIdBase = 100000
         this.messages = data.messages.map((m, i) => ({
           id: historyIdBase + i,
@@ -142,8 +152,9 @@ export const useChatStore = defineStore('chat', {
           time: m.create_at * 1000,
         }))
         msgId = historyIdBase + data.messages.length
+        this.historyLoaded = true
       } catch {
-        // 后端不可用时静默
+        // 后端不可用时静默，等待连接建立后（$open）重试
       }
     },
 

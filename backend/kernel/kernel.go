@@ -79,8 +79,8 @@ func NewKernel(cfg *config.Config) *Kernel {
 		s2.Command = resolveMCPCommand(cfg.BaseDir, s.Command)
 		k.mcp.Add(s2.ID, s2.Name, s2)
 	}
-	// 启动已启用的 MCP Server（超时由 Client 内部控制）
-	k.mcp.StartAll(context.Background())
+	// 启动已启用的 MCP Server（异步：慢的 Server（如 pnpx 首次下载）不阻塞 HTTP/WS 监听）
+	go k.mcp.StartAll(context.Background())
 
 	k.startEmotionTicker()
 	k.startArchiveTicker()

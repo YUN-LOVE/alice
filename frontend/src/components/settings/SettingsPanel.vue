@@ -79,7 +79,9 @@ function useDefault() {
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
     @click.self="chat.settingsOpen = false"
   >
-    <div class="w-[420px] rounded-2xl border border-zinc-500 bg-zinc-900 p-5 shadow-2xl">
+    <div
+      class="max-h-[92dvh] w-full max-w-[420px] overflow-y-auto rounded-2xl border border-zinc-500 bg-zinc-900 p-5 shadow-2xl"
+    >
       <h2 class="text-base font-medium text-zinc-100">设置</h2>
 
       <div class="mt-4">

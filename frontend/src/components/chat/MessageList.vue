@@ -16,7 +16,7 @@ function formatTime(ts?: number): string {
 <template>
   <div class="flex flex-col gap-4 py-4">
     <template v-if="chat.messages.length === 0">
-      <div class="mt-16 text-center text-zinc-500">
+      <div class="mt-[30vh] text-center text-zinc-500">
         <p class="text-lg">你好，我是 Alice</p>
         <p class="mt-1 text-sm">我们聊聊吧，不用记住我什么——我都记得。</p>
       </div>
@@ -34,7 +34,10 @@ function formatTime(ts?: number): string {
       >
         A
       </div>
-      <div class="flex max-w-[75%] flex-col" :class="m.role === 'user' ? 'items-end' : 'items-start'">
+      <div
+        class="flex max-w-[88%] flex-col md:max-w-[75%]"
+        :class="m.role === 'user' ? 'items-end' : 'items-start'"
+      >
         <div
           class="px-4 py-2.5 text-sm leading-relaxed"
           :class="
