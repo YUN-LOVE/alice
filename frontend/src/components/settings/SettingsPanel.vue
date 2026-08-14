@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useChatStore } from '../../stores/chat'
 import { THEME_STYLES } from '../../styles/theme'
 import { ws } from '../../services/ws'
-import { getSettings, type RuntimeSettings } from '../../services/api'
+import {
+  getSettings,
+  getVoices,
+  ttsPreview,
+  type RuntimeSettings,
+  type VoiceInfo,
+} from '../../services/api'
+import { httpBase } from '../../services/backend'
 
 const chat = useChatStore()
 const tab = ref<'appearance' | 'dialog'>('appearance')
@@ -101,6 +108,111 @@ const settingsMsg = ref('')
 const settingsErr = ref('')
 const savingSettings = ref(false)
 
+// ============ 语音设置（Edge TTS 音色/语速/音高/音量） ============
+const audioForm = ref({ voice: '', rate: 0, pitch: 0, volume: 0 })
+const voices = ref<VoiceInfo[]>([])
+const voiceLoading = ref(false)
+const previewing = ref(false)
+const previewMsg = ref('')
+const previewErr = ref('')
+const previewAudio = ref<HTMLAudioElement | null>(null)
+const savingAudio = ref(false)
+const audioMsg = ref('')
+const audioErr = ref('')
+
+// 解析 "+10%" → 10 / "+5Hz" → 5
+function parseSigned(s: string | undefined): number {
+  if (!s) return 0
+  const m = String(s).match(/([+-]?\d+(?:\.\d+)?)/)
+  return m ? Number(m[1]) : 0
+}
+
+// 按语言分组（zh 组优先）
+const voiceGroups = computed(() => {
+  const groups = new Map<string, VoiceInfo[]>()
+  for (const v of voices.value) {
+    const key = v.locale.startsWith('zh') ? '中文' : v.locale
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(v)
+  }
+  return [...groups.entries()]
+})
+
+async function loadVoices() {
+  voiceLoading.value = true
+  try {
+    const data = await getVoices('zh')
+    voices.value = data.voices
+  } catch {
+    previewErr.value = '获取音色列表失败（TTS Server 未运行？）'
+  } finally {
+    voiceLoading.value = false
+  }
+}
+
+async function previewTTS() {
+  previewing.value = true
+  previewMsg.value = ''
+  previewErr.value = ''
+  try {
+    const res = await ttsPreview({
+      text: '你好，我是 Alice，这是语音设置试听。',
+      voice: audioForm.value.voice,
+      rate: fmtSigned(audioForm.value.rate, '%'),
+      pitch: fmtSigned(audioForm.value.pitch, 'Hz'),
+      volume: fmtSigned(audioForm.value.volume, '%'),
+    })
+    previewMsg.value = '试听中...'
+    const el = previewAudio.value
+    if (el) {
+      el.src = httpBase() + res.url
+      void el.play().catch(() => {
+        previewErr.value = '浏览器阻止了自动播放，请点击播放'
+      })
+    }
+  } catch (e: any) {
+    previewErr.value = e?.message ?? '试听失败'
+  } finally {
+    previewing.value = false
+  }
+}
+
+function fmtSigned(n: number, unit: string): string {
+  if (n === 0) return `+0${unit}`
+  return n > 0 ? `+${n}${unit}` : `${n}${unit}`
+}
+
+function saveAudio() {
+  savingAudio.value = true
+  audioMsg.value = ''
+  audioErr.value = ''
+  ws.send('settings_update', {
+    section: 'audio',
+    values: {
+      tts_voice: audioForm.value.voice,
+      tts_rate: fmtSigned(audioForm.value.rate, '%'),
+      tts_pitch: fmtSigned(audioForm.value.pitch, 'Hz'),
+      tts_volume: fmtSigned(audioForm.value.volume, '%'),
+    },
+  })
+  const off = ws.on('settings_update_ack', (p: any) => {
+    if (p?.section !== 'audio') return
+    off()
+    savingAudio.value = false
+    if (p.ok) {
+      audioMsg.value = '已保存，语音参数热重载生效'
+      setTimeout(() => (audioMsg.value = ''), 3000)
+    } else {
+      audioErr.value = p.message ?? '保存失败'
+    }
+  })
+  setTimeout(() => {
+    off()
+    savingAudio.value = false
+    if (!audioMsg.value) audioErr.value = '保存超时（后端未确认）'
+  }, 4000)
+}
+
 const providers = ['deepseek', 'openai', 'siliconflow', 'mock']
 
 onMounted(async () => {
@@ -113,7 +225,14 @@ onMounted(async () => {
       hours_end: s.emotion.hours?.[1] ?? 23,
     }
     blockForm.value = { max_entries: s.block.max_entries }
+    audioForm.value = {
+      voice: s.audio?.tts_voice ?? '',
+      rate: parseSigned(s.audio?.tts_rate),
+      pitch: parseSigned(s.audio?.tts_pitch),
+      volume: parseSigned(s.audio?.tts_volume),
+    }
     settingsLoaded.value = true
+    void loadVoices()
   } catch {
     settingsErr.value = '无法加载当前设置（后端不可用？）'
   }
@@ -442,6 +561,104 @@ function applySettings() {
                     <div class="m3-field__box">
                       <input v-model.number="blockForm.max_entries" type="number" step="10" min="0" class="m3-field__input" />
                     </div>
+                  </div>
+                </div>
+
+                <!-- 语音合成（Edge TTS 图形化调整） -->
+                <div class="m3-card m3-card--filled">
+                  <div class="m3-title-small mb-1">语音合成（Edge TTS）</div>
+                  <p class="m3-body-small m3-on-surface-variant mb-3">
+                    调整 Alice 的声音：音色、语速、音高、音量。试听满意后保存生效。
+                  </p>
+
+                  <!-- 音色 -->
+                  <label class="m3-field__label">音色</label>
+                  <div class="m3-field__box mt-1">
+                    <span class="m3-field__leading m3-icon">record_voice_over</span>
+                    <select v-model="audioForm.voice" class="m3-field__input !p-0 bg-transparent">
+                      <option value="">默认（自动选择）</option>
+                      <optgroup v-for="[group, list] in voiceGroups" :key="group" :label="group">
+                        <option v-for="v in list" :key="v.short_name" :value="v.short_name">
+                          {{ v.friendly_name }} · {{ v.short_name }}
+                        </option>
+                      </optgroup>
+                    </select>
+                  </div>
+                  <p v-if="voiceLoading" class="m3-label-small m3-on-surface-variant mt-1">
+                    音色列表加载中...
+                  </p>
+
+                  <!-- 语速 -->
+                  <div class="mt-3">
+                    <div class="flex items-center justify-between">
+                      <span class="m3-label-medium">语速</span>
+                      <span class="m3-label-medium m3-primary-text tabular-nums">{{ fmtSigned(audioForm.rate, '%') }}</span>
+                    </div>
+                    <input
+                      v-model.number="audioForm.rate"
+                      type="range"
+                      min="-50"
+                      max="100"
+                      step="5"
+                      class="m3-slider mt-1"
+                    />
+                  </div>
+
+                  <!-- 音高 -->
+                  <div class="mt-3">
+                    <div class="flex items-center justify-between">
+                      <span class="m3-label-medium">音高</span>
+                      <span class="m3-label-medium m3-primary-text tabular-nums">{{ fmtSigned(audioForm.pitch, 'Hz') }}</span>
+                    </div>
+                    <input
+                      v-model.number="audioForm.pitch"
+                      type="range"
+                      min="-20"
+                      max="20"
+                      step="1"
+                      class="m3-slider mt-1"
+                    />
+                  </div>
+
+                  <!-- 音量 -->
+                  <div class="mt-3">
+                    <div class="flex items-center justify-between">
+                      <span class="m3-label-medium">音量</span>
+                      <span class="m3-label-medium m3-primary-text tabular-nums">{{ fmtSigned(audioForm.volume, '%') }}</span>
+                    </div>
+                    <input
+                      v-model.number="audioForm.volume"
+                      type="range"
+                      min="-50"
+                      max="50"
+                      step="5"
+                      class="m3-slider mt-1"
+                    />
+                  </div>
+
+                  <audio ref="previewAudio" class="hidden" />
+                  <p v-if="previewMsg" class="m3-label-small mt-2 text-[var(--md-sys-color-tertiary)]">{{ previewMsg }}</p>
+                  <p v-if="previewErr || audioErr" class="m3-label-small mt-2 text-[var(--md-sys-color-error)]">{{ previewErr || audioErr }}</p>
+                  <p v-if="audioMsg" class="m3-label-small mt-2 text-[var(--md-sys-color-tertiary)]">{{ audioMsg }}</p>
+
+                  <div class="mt-3 flex justify-end gap-2">
+                    <button
+                      class="m3-btn m3-btn--tonal m3-state-layer m3-ripple"
+                      :disabled="previewing"
+                      @click="previewTTS"
+                    >
+                      <span v-if="previewing" class="m3-spinner h-4 w-4 border-2" />
+                      <span v-else class="m3-icon m3-icon--sm">volume_up</span>
+                      试听
+                    </button>
+                    <button
+                      class="m3-btn m3-btn--filled m3-state-layer m3-ripple"
+                      :disabled="savingAudio"
+                      @click="saveAudio"
+                    >
+                      <span v-if="savingAudio" class="m3-spinner h-4 w-4 border-2" />
+                      保存语音设置
+                    </button>
                   </div>
                 </div>
 

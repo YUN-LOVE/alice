@@ -816,41 +816,59 @@ func (k *Kernel) maybeTTS(reply string) {
 	}
 
 	go func() {
-		args := map[string]any{"text": text}
-		if v := k.cfg.Kernel.Audio.TTSVoice; v != "" {
-			args["voice"] = v
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-		defer cancel()
-		res, err := k.mcp.Call(ctx, "tts__speak", args)
+		urlPath, _, err := k.synthesize(text, k.audioParams())
 		if err != nil {
 			log.Printf("[audio] TTS 生成失败: %v", err)
 			return
 		}
-		var sr struct {
-			Audio  string  `json:"audio"`
-			Format string  `json:"format"`
-			Dur    float64 `json:"duration_sec"`
-		}
-		if err := json.Unmarshal([]byte(res), &sr); err != nil || sr.Audio == "" {
-			log.Printf("[audio] TTS 返回异常: %s", truncateStr(res, 120))
-			return
-		}
-		data, err := base64.StdEncoding.DecodeString(sr.Audio)
-		if err != nil {
-			log.Printf("[audio] TTS 音频解码失败: %v", err)
-			return
-		}
-		urlPath, err := k.saveAudioFile(data, sr.Format)
-		if err != nil {
-			log.Printf("[audio] 保存音频失败: %v", err)
-			return
-		}
-		log.Printf("[audio] 回复已合成语音: %s (%.1f KB)", urlPath, float64(len(data))/1024)
+		log.Printf("[audio] 回复已合成语音: %s", urlPath)
 		if k.onAudio != nil {
 			k.onAudio(urlPath, text)
 		}
 	}()
+}
+
+// audioParams 当前配置的 TTS 参数（音色/语速/音高/音量）
+func (k *Kernel) audioParams() map[string]any {
+	return map[string]any{
+		"voice":  k.cfg.Kernel.Audio.TTSVoice,
+		"rate":   k.cfg.Kernel.Audio.TTSRate,
+		"pitch":  k.cfg.Kernel.Audio.TTSPitch,
+		"volume": k.cfg.Kernel.Audio.TTSVolume,
+	}
+}
+
+// synthesize 调内部 TTS Server 合成语音并保存文件，返回 URL 路径与估算时长
+func (k *Kernel) synthesize(text string, params map[string]any) (string, float64, error) {
+	args := map[string]any{"text": text}
+	for _, key := range []string{"voice", "rate", "pitch", "volume"} {
+		if v, ok := params[key].(string); ok && v != "" {
+			args[key] = v
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	res, err := k.mcp.Call(ctx, "tts__speak", args)
+	if err != nil {
+		return "", 0, err
+	}
+	var sr struct {
+		Audio       string  `json:"audio"`
+		Format      string  `json:"format"`
+		DurationSec float64 `json:"duration_sec"`
+	}
+	if err := json.Unmarshal([]byte(res), &sr); err != nil || sr.Audio == "" {
+		return "", 0, fmt.Errorf("TTS 返回异常: %s", truncateStr(res, 120))
+	}
+	data, err := base64.StdEncoding.DecodeString(sr.Audio)
+	if err != nil {
+		return "", 0, fmt.Errorf("TTS 音频解码失败: %w", err)
+	}
+	urlPath, err := k.saveAudioFile(data, sr.Format)
+	if err != nil {
+		return "", 0, err
+	}
+	return urlPath, sr.DurationSec, nil
 }
 
 // saveAudioFile 保存音频到 uploads/audio/<时间戳>.<ext>，返回 /uploads/... URL 路径
@@ -888,6 +906,36 @@ func (k *Kernel) STT(ctx context.Context, audioPath string) (string, error) {
 		return "", fmt.Errorf("STT 返回异常: %s", truncateStr(res, 120))
 	}
 	return out.Text, nil
+}
+
+// AudioVoices 获取 TTS 可用音色列表（调内部 tts Server 的 list_voices 工具）
+func (k *Kernel) AudioVoices(ctx context.Context, locale string) ([]map[string]any, error) {
+	if !k.mcp.InternalRunning("tts") {
+		return nil, fmt.Errorf("TTS Server 未运行")
+	}
+	args := map[string]any{}
+	if locale != "" {
+		args["locale"] = locale
+	}
+	res, err := k.mcp.Call(ctx, "tts__list_voices", args)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Voices []map[string]any `json:"voices"`
+	}
+	if err := json.Unmarshal([]byte(res), &out); err != nil {
+		return nil, fmt.Errorf("音色列表返回异常: %s", truncateStr(res, 120))
+	}
+	return out.Voices, nil
+}
+
+// TTS 合成并保存语音（设置面板试听 / 通用 TTS 用），返回 URL 路径
+func (k *Kernel) TTS(ctx context.Context, text string, params map[string]any) (string, float64, error) {
+	if !k.mcp.InternalRunning("tts") {
+		return "", 0, fmt.Errorf("TTS Server 未运行")
+	}
+	return k.synthesize(text, params)
 }
 
 // ==================== 运行时设置（写回 YAML + 热重载） ====================
@@ -929,6 +977,13 @@ func (k *Kernel) Settings() map[string]any {
 			"hours":                  k.cfg.Emotion.Proactive.Hours,
 		},
 		"block": map[string]any{"max_entries": k.cfg.Block.MaxEntries},
+		"audio": map[string]any{
+			"tts_enabled": k.cfg.Kernel.Audio.TTSEnabled,
+			"tts_voice":   k.cfg.Kernel.Audio.TTSVoice,
+			"tts_rate":    k.cfg.Kernel.Audio.TTSRate,
+			"tts_pitch":   k.cfg.Kernel.Audio.TTSPitch,
+			"tts_volume":  k.cfg.Kernel.Audio.TTSVolume,
+		},
 	}
 }
 

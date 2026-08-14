@@ -1,6 +1,7 @@
 package server
 
 import (
+	"strings"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -212,6 +213,47 @@ func RegisterRoutes(mux *http.ServeMux, k *kernel.Kernel) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"text": text})
+	})
+
+	// TTS 可用音色列表（设置面板加载用，?locale=zh 可选）
+	mux.HandleFunc("GET /api/v1/audio/voices", func(w http.ResponseWriter, r *http.Request) {
+		voices, err := k.AudioVoices(r.Context(), r.URL.Query().Get("locale"))
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "获取音色列表失败: " + err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"voices": voices})
+	})
+
+	// TTS 合成（设置面板试听/通用）：{text, voice?, rate?, pitch?, volume?} → {url, duration_sec}
+	mux.HandleFunc("POST /api/v1/audio/tts", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Text   string `json:"text"`
+			Voice  string `json:"voice"`
+			Rate   string `json:"rate"`
+			Pitch  string `json:"pitch"`
+			Volume string `json:"volume"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"message": "请求格式错误"})
+			return
+		}
+		if strings.TrimSpace(body.Text) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"message": "缺少 text"})
+			return
+		}
+		params := map[string]any{
+			"voice":  body.Voice,
+			"rate":   body.Rate,
+			"pitch":  body.Pitch,
+			"volume": body.Volume,
+		}
+		urlPath, dur, err := k.TTS(r.Context(), body.Text, params)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "TTS 合成失败: " + err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"url": urlPath, "duration_sec": dur})
 	})
 }
 

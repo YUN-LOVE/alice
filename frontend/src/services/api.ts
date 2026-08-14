@@ -122,9 +122,44 @@ export interface RuntimeSettings {
     hours: number[]
   }
   block: { max_entries: number }
+  audio: {
+    tts_enabled: boolean
+    tts_voice: string
+    tts_rate: string
+    tts_pitch: string
+    tts_volume: string
+  }
 }
 
 /** 当前可调设置（设置面板加载用） */
 export function getSettings(): Promise<RuntimeSettings> {
   return request('/settings')
+}
+
+export interface VoiceInfo {
+  short_name: string
+  friendly_name: string
+  gender: string
+  locale: string
+  status: number
+}
+
+/** TTS 可用音色列表（?locale=zh 可选过滤） */
+export function getVoices(locale?: string): Promise<{ voices: VoiceInfo[] }> {
+  const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+  return request(`/audio/voices${q}`)
+}
+
+/** TTS 试听合成 → {url, duration_sec} */
+export function ttsPreview(params: {
+  text: string
+  voice?: string
+  rate?: string
+  pitch?: string
+  volume?: string
+}): Promise<{ url: string; duration_sec: number }> {
+  return request('/audio/tts', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
 }

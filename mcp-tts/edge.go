@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -8,8 +9,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -159,6 +162,25 @@ func edgeWSURL() string {
 	}.Encode()
 }
 
+// edgeDialContext 默认强制 IPv4 拨号：微软 Edge TTS 的 WebSocket 服务
+// 经 IPv6 路径可能被重置/丢包（部分网络环境），IPv4 稳定；
+// 环境变量 ALICE_TTS_FORCE_IPV6=1 可切换回系统默认（含 IPv6）
+func edgeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	d := &net.Dialer{Timeout: 15 * time.Second}
+	if os.Getenv("ALICE_TTS_FORCE_IPV6") == "1" {
+		return d.DialContext(ctx, network, addr)
+	}
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip4", host)
+	if err != nil || len(ips) == 0 {
+		return d.DialContext(ctx, network, addr) // 解析失败回退系统默认
+	}
+	return d.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
+}
+
 // edgeSynthesize 通过 Edge TTS WebSocket 合成语音，返回 MP3 字节
 func edgeSynthesize(text, voice, rate, pitch, volume string) ([]byte, error) {
 	headers := http.Header{
@@ -173,8 +195,9 @@ func edgeSynthesize(text, voice, rate, pitch, volume string) ([]byte, error) {
 	}
 
 	dialer := websocket.Dialer{
-		HandshakeTimeout:   15 * time.Second,
-		EnableCompression:  true,
+		HandshakeTimeout:  15 * time.Second,
+		EnableCompression: true,
+		NetDialContext:    edgeDialContext,
 	}
 	conn, resp, err := dialer.Dial(edgeWSURL(), headers)
 	if err != nil {
@@ -260,30 +283,46 @@ func indexDoubleCRLF(data []byte) int {
 }
 
 // speakViaEdge 合成语音：指定音色则精确使用（失败即报错）；
-// 未指定则尝试默认候选列表
+// 未指定则尝试默认候选列表。微软对高频请求会临时重置连接，失败自动重试
+// （间隔 3s/6s，最多 3 轮），限流恢复后即可成功
 func speakViaEdge(text, voice, rate, pitch, volume string) (*speakResult, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt*3) * time.Second)
+		}
+		res, err := edgeTryVoices(text, voice, rate, pitch, volume)
+		if err == nil {
+			return res, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func edgeTryVoices(text, voice, rate, pitch, volume string) (*speakResult, error) {
 	if voice != "" {
 		data, err := edgeSynthesize(text, voice, rate, pitch, volume)
 		if err != nil {
 			return nil, err
 		}
-		return &speakResult{
-			Audio:       base64.StdEncoding.EncodeToString(data),
-			Format:      "mp3",
-			DurationSec: estimateDuration(len(data), "mp3"),
-		}, nil
+		return edgeResult(data)
 	}
 	var lastErr error
 	for _, v := range edgeVoices {
 		data, err := edgeSynthesize(text, v, rate, pitch, volume)
 		if err == nil {
-			return &speakResult{
-				Audio:       base64.StdEncoding.EncodeToString(data),
-				Format:      "mp3",
-				DurationSec: estimateDuration(len(data), "mp3"),
-			}, nil
+			return edgeResult(data)
 		}
 		lastErr = err
 	}
-	return nil, fmt.Errorf("Edge TTS 全部音色失败，最后错误: %v", lastErr)
+	return nil, lastErr
+}
+
+func edgeResult(data []byte) (*speakResult, error) {
+	return &speakResult{
+		Audio:       base64.StdEncoding.EncodeToString(data),
+		Format:      "mp3",
+		DurationSec: estimateDuration(len(data), "mp3"),
+	}, nil
 }

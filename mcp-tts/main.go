@@ -110,6 +110,16 @@ func handle(m *msg, enc *json.Encoder) {
 						"required": []string{"text"},
 					},
 				},
+				map[string]any{
+					"name":        "list_voices",
+					"description": "获取 Edge TTS 可用音色列表（含中文/多语言音色）。用于语音设置面板展示可选音色。",
+					"inputSchema": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"locale": map[string]any{"type": "string", "description": "可选：语言过滤，如 zh / zh-CN / en-US，空返回全部"},
+						},
+					},
+				},
 			},
 		})
 
@@ -144,6 +154,24 @@ func handle(m *msg, enc *json.Encoder) {
 				return
 			}
 			data, _ := json.Marshal(out)
+			respond(enc, m.ID, map[string]any{
+				"content": []any{map[string]any{"type": "text", "text": string(data)}},
+				"isError": false,
+			})
+		case "list_voices":
+			locale := ""
+			if v, ok := args["locale"].(string); ok {
+				locale = v
+			}
+			voices, err := listVoices(locale)
+			if err != nil {
+				respond(enc, m.ID, map[string]any{
+					"content": []any{map[string]any{"type": "text", "text": "获取音色列表失败: " + err.Error()}},
+					"isError": true,
+				})
+				return
+			}
+			data, _ := json.Marshal(map[string]any{"voices": voices})
 			respond(enc, m.ID, map[string]any{
 				"content": []any{map[string]any{"type": "text", "text": string(data)}},
 				"isError": false,

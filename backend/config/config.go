@@ -45,9 +45,12 @@ type KernelConfig struct {
 	} `yaml:"context"`
 	// Audio 语音能力（阶段：TTS/STT）
 	Audio struct {
-		TTSEnabled  bool   `yaml:"tts_enabled"`  // 回复完成后自动合成语音并推送 assistant_audio
-		TTSVoice    string `yaml:"tts_voice"`    // 音色（缺省用 TTS Server 默认）
-		STTEnabled  bool   `yaml:"stt_enabled"`  // 语音输入转文字
+		TTSEnabled  bool   `yaml:"tts_enabled"`   // 回复完成后自动合成语音并推送 assistant_audio
+		TTSVoice    string `yaml:"tts_voice"`     // 音色（缺省用 TTS Server 默认）
+		TTSRate     string `yaml:"tts_rate"`      // 语速（Edge TTS），如 +10% / -20%
+		TTSPitch    string `yaml:"tts_pitch"`     // 音高（Edge TTS），如 +5Hz / -3Hz
+		TTSVolume   string `yaml:"tts_volume"`    // 音量（Edge TTS），如 +10% / -50%
+		STTEnabled  bool   `yaml:"stt_enabled"`   // 语音输入转文字
 		MaxUploadMB int    `yaml:"max_upload_mb"` // 文件分块上传大小上限
 	} `yaml:"audio"`
 	SystemPrompt string `yaml:"-"`
@@ -353,7 +356,7 @@ var emotionSettingPaths = map[string][]string{
 }
 
 // ApplySettings 把运行时设置写回 YAML（随后 watcher 热重载自动生效）。
-// section: "llm" / "emotion" / "block"；values 键见各 SettingPaths，未知键忽略。
+// section: "llm" / "emotion" / "block" / "audio"；values 键见各 SettingPaths，未知键忽略。
 func ApplySettings(configDir, section string, values map[string]any) error {
 	var paths map[string][]string
 	var filename string
@@ -365,6 +368,15 @@ func ApplySettings(configDir, section string, values map[string]any) error {
 	case "block":
 		filename = "memory_block.yaml"
 		paths = map[string][]string{"max_entries": {"memory_block", "max_entries"}}
+	case "audio":
+		filename = "kernel.yaml"
+		paths = map[string][]string{
+			"tts_voice":  {"audio", "tts_voice"},
+			"tts_rate":   {"audio", "tts_rate"},
+			"tts_pitch":  {"audio", "tts_pitch"},
+			"tts_volume": {"audio", "tts_volume"},
+			"tts_enabled": {"audio", "tts_enabled"},
+		}
 	default:
 		return fmt.Errorf("未知设置段: %s", section)
 	}
