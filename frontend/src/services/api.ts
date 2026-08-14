@@ -81,6 +81,15 @@ export function setProactiveEnabled(enabled: boolean): Promise<{ enabled: boolea
   })
 }
 
+/** 当前情绪状态（面板加载用） */
+export function getEmotionState(): Promise<{
+  state: Record<string, number>
+  description: string
+  top: string
+}> {
+  return request('/emotion/state')
+}
+
 export interface HistoryMessage {
   role: string
   content: string
@@ -91,4 +100,31 @@ export interface HistoryMessage {
 export function getHistory(date?: string): Promise<{ date: string; messages: HistoryMessage[] }> {
   const q = date ? `?date=${date}` : ''
   return request(`/history${q}`)
+}
+
+export interface RuntimeSettings {
+  llm: {
+    provider: string
+    base_url: string
+    api_key_configured: boolean
+    model: string
+    temperature: number
+    max_tokens: number
+  }
+  emotion: {
+    decay_rate: number
+    max_value: number
+    threshold: number
+    cooldown_seconds: number
+    tick_seconds: number
+    silent_after_minutes: number
+    skip_if_active_minutes: number
+    hours: number[]
+  }
+  block: { max_entries: number }
+}
+
+/** 当前可调设置（设置面板加载用） */
+export function getSettings(): Promise<RuntimeSettings> {
+  return request('/settings')
 }

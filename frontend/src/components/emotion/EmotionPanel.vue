@@ -1,8 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useChatStore } from '../../stores/chat'
+import { getEmotionState } from '../../services/api'
 
 const chat = useChatStore()
+
+// 打开面板时主动拉取当前情绪（不必等下一次对话）
+onMounted(async () => {
+  if (Object.keys(chat.emotion.state).length === 0) {
+    try {
+      const s = await getEmotionState()
+      chat.emotion = { top: s.top ?? '', state: s.state ?? {} }
+    } catch {
+      // 后端不可用时保持现状
+    }
+  }
+})
+
 // 情绪维度 + 中文名
 const dims = computed(() => {
   const state = chat.emotion.state
@@ -18,51 +32,78 @@ const dims = computed(() => {
 })
 
 const topEmotion = computed(() => chat.emotion.top)
+
+// 主导情绪的颜色语义（按维度映射到 M3 色）
+function barClass(name: string): string {
+  switch (name) {
+    case '开心':
+      return 'bg-[var(--md-sys-color-tertiary)]'
+    case '失落':
+      return 'bg-[var(--md-sys-color-primary)]'
+    case '温柔':
+      return 'bg-[var(--md-sys-color-secondary)]'
+    case '焦虑':
+      return 'bg-[var(--md-sys-color-error)]'
+    default:
+      return 'bg-[var(--md-sys-color-primary)]'
+  }
+}
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <div class="text-xs text-zinc-500">当前主导情绪：</div>
-    <div v-if="topEmotion" class="text-2xl font-medium text-zinc-100">{{ topEmotion }}</div>
-    <div v-else class="text-sm text-zinc-600">暂无情绪数据，说句话试试</div>
+  <div class="flex flex-col gap-5">
+    <!-- 当前主导情绪 -->
+    <div class="m3-card m3-card--filled flex items-center gap-4">
+      <div
+        class="m3-avatar m3-avatar--alice flex h-14 w-14 items-center justify-center text-2xl"
+      >
+        {{ topEmotion?.slice(0, 1) ?? '–' }}
+      </div>
+      <div class="min-w-0">
+        <div class="m3-label-medium m3-on-surface-variant">当前主导情绪</div>
+        <div v-if="topEmotion" class="m3-title-large mt-0.5 truncate">{{ topEmotion }}</div>
+        <div v-else class="m3-body-medium m3-on-surface-variant mt-0.5">暂无数据，说句话试试</div>
+      </div>
+    </div>
 
-    <div class="flex flex-col gap-3">
-      <div v-for="d in dims" :key="d.name" class="flex items-center gap-3">
-        <span class="w-10 shrink-0 text-sm text-zinc-300">{{ d.name }}</span>
-        <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-800">
+    <!-- 情绪维度（M3 线性进度） -->
+    <div class="flex flex-col gap-4">
+      <div v-for="d in dims" :key="d.name" class="flex flex-col gap-1.5">
+        <div class="flex items-center justify-between">
+          <span class="m3-label-medium m3-on-surface">{{ d.name }}</span>
+          <span class="m3-label-small m3-on-surface-variant tabular-nums">
+            {{ (d.value * 100).toFixed(0) }}
+          </span>
+        </div>
+        <div class="m3-linear-progress">
           <div
-            class="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-700"
-            :style="{ width: `${Math.round(d.value * 100)}%` }"
+            class="m3-linear-progress__bar"
+            :class="barClass(d.name)"
+            :style="{ transform: `scaleX(${Math.min(1, d.value)})` }"
           />
         </div>
-        <span class="w-9 shrink-0 text-right text-xs text-zinc-500">
-          {{ (d.value * 100).toFixed(0) }}
-        </span>
       </div>
     </div>
-
-    <p class="mt-2 border-t border-zinc-500 pt-3 text-xs leading-relaxed text-zinc-500">
-      情绪由对话驱动、随时间自然衰减。情绪积累到一定程度，Alice 会主动来找你说话。
-    </p>
 
     <!-- 主动推送开关 -->
-    <div class="mt-2 flex items-center justify-between border-t border-zinc-500 pt-3">
-      <div>
-        <div class="text-sm text-zinc-200">主动推送</div>
-        <div class="text-xs text-zinc-500">情绪积累时 Alice 主动找你说话</div>
+    <div class="m3-card m3-card--outlined flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="m3-title-small">主动推送</div>
+        <div class="m3-body-small m3-on-surface-variant mt-0.5">情绪积累时 Alice 主动找你说话</div>
       </div>
-      <button
-        class="relative h-5 w-9 rounded-full transition"
-        :class="chat.proactiveEnabled ? 'bg-purple-500' : 'bg-zinc-700'"
-        role="switch"
-        :aria-checked="chat.proactiveEnabled"
-        @click="chat.toggleProactive()"
-      >
-        <span
-          class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
-          :class="chat.proactiveEnabled ? 'left-[18px]' : 'left-0.5'"
+      <label class="m3-switch shrink-0">
+        <input
+          type="checkbox"
+          :checked="chat.proactiveEnabled"
+          @change="chat.toggleProactive()"
         />
-      </button>
+        <span class="m3-switch__track" />
+        <span class="m3-switch__thumb" />
+      </label>
     </div>
+
+    <p class="m3-body-small m3-on-surface-variant leading-relaxed">
+      情绪由对话驱动、随时间自然衰减。情绪积累到一定程度，Alice 会主动来找你说话。
+    </p>
   </div>
 </template>

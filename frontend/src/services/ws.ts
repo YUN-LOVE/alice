@@ -74,6 +74,13 @@ class WsService {
     }
   }
 
+  /** 发送二进制帧（分块上传内容） */
+  sendBinary(data: ArrayBuffer) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(data)
+    }
+  }
+
   close() {
     this.manualClose = true
     this.ws?.close()

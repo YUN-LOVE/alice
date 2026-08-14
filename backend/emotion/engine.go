@@ -156,7 +156,8 @@ func (e *Engine) Tick() {
 	}
 }
 
-// Summary 返回情绪描述文本 + 命中的模板（用于注入上下文）
+// Summary 返回情绪描述文本 + 命中的模板（用于注入上下文）。
+// 若存在显著的次要情绪（第二高维度 ≥ 0.5），附加一句描述，让注入更立体。
 func (e *Engine) Summary() (description, styleTemplate string, top string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -170,11 +171,23 @@ func (e *Engine) Summary() (description, styleTemplate string, top string) {
 			top = d
 		}
 	}
+	// 找第二高维度（显著时附加）
+	second, secondV := "", -1.0
+	for d, v := range e.vector {
+		if d != top && v > secondV {
+			secondV = v
+			second = d
+		}
+	}
 
 	// 按模板顺序匹配
 	for _, tpl := range e.cfg.Templates {
 		if matchConditions(e.vector, tpl.Conditions) {
-			return tpl.Text, tpl.Name, top
+			desc := tpl.Text
+			if second != "" && secondV >= 0.5 {
+				desc += " 同时你还带着一些「" + second + "」的情绪，别藏得太严实。"
+			}
+			return desc, tpl.Name, top
 		}
 	}
 	return "你情绪平稳，按自己的人格自然回应。", "default", top

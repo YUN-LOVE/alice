@@ -36,7 +36,7 @@ export const useChatStore = defineStore('chat', {
     panelOpen: false,
     panelTab: 'memory' as 'memory' | 'mcp' | 'emotion',
     theme: 'dark' as 'dark' | 'light',
-    seedColor: '#7c5cff',
+    seedColor: '#00639a',
     themeStyle: 'tonal-spot' as ThemeStyle,
     initialized: false,
     historyLoaded: false,
@@ -45,6 +45,8 @@ export const useChatStore = defineStore('chat', {
       state: {} as Record<string, number>,
     },
     proactiveEnabled: true,
+    // 回复语音（assistant_audio）：url 为完整地址，text 为对应文本
+    audio: null as { url: string; text: string } | null,
   }),
 
   actions: {
@@ -86,6 +88,12 @@ export const useChatStore = defineStore('chat', {
       ws.on('proactive_message', (p) => {
         // 主动推送：作为 Alice 的消息展示
         this.pushAssistant(p.text ?? '')
+      })
+      ws.on('assistant_audio', (p) => {
+        // 回复语音：url 为后端相对路径，拼接后端地址
+        if (p?.url) {
+          this.audio = { url: httpBase() + p.url, text: p.text ?? '' }
+        }
       })
       ws.on('error', (p) => {
         this.pushAssistant(p.message ?? '出错了')
@@ -229,6 +237,11 @@ export const useChatStore = defineStore('chat', {
     reset() {
       this.messages = []
       this.sending = false
+    },
+
+    /** 关闭语音播放条 */
+    dismissAudio() {
+      this.audio = null
     },
   },
 })

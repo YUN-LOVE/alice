@@ -4,12 +4,14 @@ import { useChatStore } from '../../stores/chat'
 import { useMCPStore } from '../../stores/mcp'
 import MessageList from './MessageList.vue'
 import MessageInput from './MessageInput.vue'
+import AudioPlayer from './AudioPlayer.vue'
 import SettingsPanel from '../settings/SettingsPanel.vue'
 import SidePanel from '../panel/SidePanel.vue'
 
 const chat = useChatStore()
 const mcp = useMCPStore()
 const scrollContainer = ref<HTMLElement | null>(null)
+const scrolled = ref(false)
 const keyboardInset = ref(0) // 虚拟键盘遮挡高度（旧浏览器兼容，键盘弹出时把输入区顶起）
 let unwatch: (() => void) | null = null
 
@@ -18,6 +20,11 @@ async function scrollToBottom() {
   if (scrollContainer.value) {
     scrollContainer.value.scrollTo({ top: scrollContainer.value.scrollHeight })
   }
+}
+
+function onScroll() {
+  const el = scrollContainer.value
+  scrolled.value = !!el && el.scrollTop > 4
 }
 
 function openPanel(tab: 'memory' | 'mcp' | 'emotion') {
@@ -45,6 +52,7 @@ onMounted(() => {
   void chat.connect()
   void chat.loadHistory() // 加载当天历史聊天记录
   void mcp.refresh() // 状态栏显示 MCP 数量
+  mcp.registerCapabilities() // 监听 MCP 能力变化广播（其他端操作实时同步）
   // 新消息时自动滚到底
   unwatch = chat.$subscribe(() => {
     void scrollToBottom()
@@ -61,97 +69,104 @@ onUnmounted(() => {
 
 <template>
   <div class="m3-surface relative flex h-dvh flex-col overflow-hidden">
-    <!-- 顶部栏 -->
-    <header class="m3-surface-container-low flex h-16 shrink-0 items-center gap-2 border-b border-zinc-500 px-3 sm:gap-3 sm:px-4">
+    <!-- ===== Top App Bar（M3 Small） ===== -->
+    <header class="m3-topbar shrink-0 border-b border-[var(--md-sys-color-outline-variant)]" :class="{ 'm3-topbar--scrolled': scrolled }">
       <div
-        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-base font-bold m3-on-primary shadow-lg"
+        class="m3-avatar m3-avatar--alice m3-ripple h-10 w-10 select-none text-base"
+        title="Alice"
       >
         A
       </div>
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
-          <span class="shrink-0 font-medium">Alice</span>
+      <div class="m3-topbar__title">
+        <h1>Alice</h1>
+        <p class="flex items-center gap-1.5">
           <span
             class="inline-block h-2 w-2 shrink-0 rounded-full"
-            :class="chat.connected ? 'bg-emerald-400' : 'bg-red-500'"
+            :class="chat.connected ? 'bg-[var(--md-sys-color-tertiary)]' : 'bg-[var(--md-sys-color-error)]'"
           />
-          <span class="hidden min-w-0 truncate text-xs sm:inline m3-on-surface-variant">
-            {{ chat.serverInfo?.llm ?? '连接中...' }}
-          </span>
-        </div>
+          <span class="truncate">{{ chat.connected ? (chat.serverInfo?.llm ?? '连接中...') : '未连接' }}</span>
+        </p>
       </div>
 
-      <!-- 桌面端快捷入口：记忆 / MCP / 情绪 -->
+      <!-- 桌面端快捷入口 -->
       <nav class="hidden shrink-0 items-center gap-1 md:flex">
-        <button
-          class="rounded-full px-3 py-1.5 text-sm m3-on-surface-variant hover:bg-zinc-800"
-          @click="openPanel('memory')"
-        >
-          记忆
+        <button class="m3-btn m3-btn--text m3-state-layer m3-ripple" @click="openPanel('memory')">
+          <span class="m3-icon m3-icon--sm">psychology</span>记忆
         </button>
-        <button
-          class="rounded-full px-3 py-1.5 text-sm m3-on-surface-variant hover:bg-zinc-800"
-          @click="openPanel('mcp')"
-        >
-          MCP
+        <button class="m3-btn m3-btn--text m3-state-layer m3-ripple" @click="openPanel('mcp')">
+          <span class="m3-icon m3-icon--sm">extension</span>MCP
         </button>
-        <button
-          class="rounded-full px-3 py-1.5 text-sm m3-on-surface-variant hover:bg-zinc-800"
-          @click="openPanel('emotion')"
-        >
-          情绪
+        <button class="m3-btn m3-btn--text m3-state-layer m3-ripple" @click="openPanel('emotion')">
+          <span class="m3-icon m3-icon--sm">sentiment_satisfied</span>情绪
         </button>
       </nav>
 
-      <!-- 移动端菜单：打开侧边面板 -->
+      <!-- 移动端：打开抽屉 -->
       <button
-        class="rounded-full p-2 text-lg m3-on-surface-variant hover:bg-zinc-800 md:hidden"
+        class="m3-icon-btn m3-state-layer m3-ripple md:hidden"
         title="菜单（记忆 / MCP / 情绪）"
         @click="openPanel('memory')"
       >
-        ☰
+        <span class="m3-icon">menu</span>
       </button>
 
       <button
-        class="rounded-full px-3 py-1.5 text-sm m3-on-surface-variant hover:bg-zinc-800"
-        @click="chat.settingsOpen = true"
-      >
-        设置
-      </button>
-      <button
-        class="rounded-full p-2 text-sm m3-on-surface-variant hover:bg-zinc-800"
-        title="切换主题"
+        class="m3-icon-btn m3-state-layer m3-ripple"
+        :title="chat.theme === 'dark' ? '切换为浅色' : '切换为深色'"
         @click="chat.toggleTheme()"
       >
-        {{ chat.theme === 'dark' ? '☀️' : '🌙' }}
+        <span class="m3-icon">{{ chat.theme === 'dark' ? 'dark_mode' : 'light_mode' }}</span>
+      </button>
+      <button
+        class="m3-icon-btn m3-state-layer m3-ripple"
+        title="设置"
+        @click="chat.settingsOpen = true"
+      >
+        <span class="m3-icon">settings</span>
       </button>
     </header>
 
-    <!-- 消息列表 -->
-    <main ref="scrollContainer" class="flex-1 overflow-y-auto px-3 sm:px-4">
+    <!-- ===== 消息列表 ===== -->
+    <main
+      ref="scrollContainer"
+      class="flex-1 overflow-y-auto overscroll-contain"
+      @scroll="onScroll"
+    >
       <MessageList />
     </main>
 
-    <!-- 输入区 -->
+    <!-- ===== 输入区 ===== -->
     <footer
-      class="m3-surface-container-low shrink-0 border-t border-zinc-500 px-3 pt-3 sm:px-4"
+      class="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-3 sm:px-4"
       :style="{
-        paddingBottom: `calc(${keyboardInset}px + max(1.25rem, env(safe-area-inset-bottom)))`,
+        paddingBottom: `calc(${keyboardInset}px + max(1rem, env(safe-area-inset-bottom)))`,
       }"
     >
       <MessageInput />
-      <!-- 底部状态栏 -->
-      <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs m3-on-surface-variant">
-        <span class="shrink-0">😊 {{ chat.emotion.top || '平静' }}</span>
-        <span class="shrink-0">💾 记忆: {{ chat.memoryCount }} 条</span>
-        <span class="hidden shrink-0 sm:inline">🔌 MCP: {{ mcp.servers.filter((s) => s.running).length }} 个运行中</span>
+      <!-- 底部状态行（M3：label-medium + on-surface-variant） -->
+      <div class="m3-label-medium m3-on-surface-variant mx-1 mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 pb-1">
+        <span class="inline-flex items-center gap-1">
+          <span class="m3-icon m3-icon--xs">sentiment_satisfied</span>
+          <span>{{ chat.emotion.top || '平静' }}</span>
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <span class="m3-icon m3-icon--xs">database</span>
+          <span>{{ chat.memoryCount }} 条记忆</span>
+        </span>
+        <span class="hidden items-center gap-1 sm:inline-flex">
+          <span class="m3-icon m3-icon--xs">extension</span>
+          <span>{{ mcp.servers.filter((s) => s.running).length }} 个 MCP 运行中</span>
+        </span>
       </div>
     </footer>
 
-    <!-- 侧边面板 -->
+    <!-- ===== 侧边抽屉（M3 Navigation Drawer） ===== -->
     <SidePanel />
 
-    <!-- 设置面板 -->
+    <!-- ===== 设置对话框 ===== -->
     <SettingsPanel v-if="chat.settingsOpen" />
+
+    <!-- ===== 回复语音播放条 ===== -->
+    <AudioPlayer />
   </div>
 </template>

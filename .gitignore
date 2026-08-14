@@ -4,3 +4,16 @@
 # Go 构建产物
 *.exe
 backend/alice-server
+mcp-server/alice-local-tools
+mcp-vision/alice-vision-tools
+mcp-tts/alice-tts
+mcp-stt/alice-stt
+
+# 运行时数据（上传的音频 / 文件 / 临时文件）
+backend/uploads/
+
+# Go 构建缓存（沙箱环境 GOCACHE 重定向）
+.gocache/
+
+# pnpm 工作区 store（沙箱环境 store 重定向）
+.pnpm-store/

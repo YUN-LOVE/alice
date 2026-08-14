@@ -1,61 +1,11 @@
 @import "tailwindcss";
+@import "material-symbols/rounded.css";
+@import "./tokens.css";
+@import "./m3.css";
 
-/* ===== Material You 动态主题 =====
-   主题色由 src/styles/theme.ts 运行时生成并写入 --md-sys-color-* 与 --color-zinc-* 内联变量，
-   因此本文件不再硬编码配色。首次渲染前使用 Tailwind 默认值，挂载后立即应用 M3 主题。 */
-
-/* M3 语义工具类（Expressive：surface 层次 + 容器色 + 大圆角） */
-.m3-surface {
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface);
-}
-.m3-surface-container {
-  background: var(--md-sys-color-surface-container);
-  color: var(--md-sys-color-on-surface);
-}
-.m3-surface-container-low {
-  background: var(--md-sys-color-surface-container-low);
-  color: var(--md-sys-color-on-surface);
-}
-.m3-surface-container-high {
-  background: var(--md-sys-color-surface-container-high);
-  color: var(--md-sys-color-on-surface);
-}
-.m3-surface-container-highest {
-  background: var(--md-sys-color-surface-container-highest);
-  color: var(--md-sys-color-on-surface);
-}
-.m3-primary {
-  background: var(--md-sys-color-primary);
-  color: var(--md-sys-color-on-primary);
-}
-.m3-primary-container {
-  background: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-on-primary-container);
-}
-.m3-secondary-container {
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
-}
-.m3-tertiary {
-  background: var(--md-sys-color-tertiary);
-  color: var(--md-sys-color-on-tertiary);
-}
-.m3-on-primary {
-  color: var(--md-sys-color-on-primary);
-}
-.m3-on-surface-variant {
-  color: var(--md-sys-color-on-surface-variant);
-}
-.m3-outline-variant {
-  border-color: var(--md-sys-color-outline-variant);
-}
-.m3-radius-lg {
-  border-radius: 16px;
-}
-.m3-radius-xl {
-  border-radius: 24px;
-}
+/* ===== 全局入口 =====
+   设计令牌与组件样式见 tokens.css / m3.css；
+   主题色由 src/styles/theme.ts 运行时生成（--md-sys-color-*）。 */
 
 /* ==================== Markdown 内容渲染 ==================== */
 .md-content {
@@ -106,31 +56,32 @@
 .md-content blockquote {
   margin: 0.5em 0;
   padding: 0.1em 0.9em;
-  border-left: 3px solid var(--color-zinc-600);
-  color: var(--color-zinc-400);
+  border-left: 3px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
 }
 .md-content code {
   padding: 0.12em 0.35em;
   border-radius: 0.25em;
-  background: var(--color-zinc-700);
-  color: var(--color-zinc-100);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  font-family: var(--md-font-mono);
   font-size: 0.85em;
 }
 .md-content pre {
   margin: 0.5em 0;
   padding: 0.8em 1em;
-  border-radius: 0.5em;
+  border-radius: var(--md-shape-small);
   overflow-x: auto;
-  background: var(--color-zinc-900);
+  background: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
 }
 .md-content pre code {
   padding: 0;
   background: transparent;
-  color: var(--color-zinc-100);
+  color: var(--md-sys-color-on-surface);
 }
 .md-content a {
-  color: var(--color-purple-500);
+  color: var(--md-sys-color-primary);
   text-decoration: underline;
 }
 .md-content table {
@@ -141,13 +92,12 @@
 .md-content th,
 .md-content td {
   padding: 0.35em 0.6em;
-  border: 1px solid var(--color-zinc-700);
+  border: 1px solid var(--md-sys-color-outline-variant);
 }
 .md-content th {
-  background: var(--color-zinc-900);
+  background: var(--md-sys-color-surface-container-lowest);
 }
 .md-content img {
   max-width: 100%;
-  border-radius: 0.4em;
+  border-radius: var(--md-shape-small);
 }
-

@@ -42,24 +42,34 @@ export interface ThemeState {
   seed: string // 种子色（hex）
   mode: 'dark' | 'light'
   style: ThemeStyle // 取色算法
+  v?: number // 主题版本（迁移用）
 }
 
 const LS_KEY = 'alice.theme.m3'
-const DEFAULT_SEED = '#7c5cff'
+// 默认种子色：蓝色系（浅色模式下 accent 清爽不刺眼；
+// 紫色 #7c5cff 在浅色模式下派生出的 primary/背景偏紫，已弃用为默认）
+const DEFAULT_SEED = '#00639a'
+const THEME_VERSION = 2
 
 export function getSavedTheme(): ThemeState {
   try {
     const raw = localStorage.getItem(LS_KEY)
     if (raw) {
       const t = JSON.parse(raw)
-      if (t.seed && (t.mode === 'dark' || t.mode === 'light') && t.style) return t
+      if (t.seed && (t.mode === 'dark' || t.mode === 'light') && t.style) {
+        // v1 迁移：旧默认紫色种子（未主动换色）升级为新默认蓝色
+        if (t.v !== THEME_VERSION && t.seed === '#7c5cff') {
+          return { seed: DEFAULT_SEED, mode: t.mode, style: t.style, v: THEME_VERSION }
+        }
+        return t
+      }
     }
   } catch {}
-  return { seed: DEFAULT_SEED, mode: 'dark', style: 'tonal-spot' }
+  return { seed: DEFAULT_SEED, mode: 'dark', style: 'tonal-spot', v: THEME_VERSION }
 }
 
 export function saveTheme(state: ThemeState) {
-  localStorage.setItem(LS_KEY, JSON.stringify(state))
+  localStorage.setItem(LS_KEY, JSON.stringify({ ...state, v: THEME_VERSION }))
 }
 
 // 按取色算法构建 M3 DynamicScheme（自带完整 surface 色阶）
@@ -160,6 +170,8 @@ function applyTheme(scheme: DynamicScheme, mode: 'dark' | 'light') {
     ['on-tertiary-container', scheme.onTertiaryContainer],
     ['error', scheme.error],
     ['on-error', scheme.onError],
+    ['error-container', scheme.errorContainer],
+    ['on-error-container', scheme.onErrorContainer],
     ['surface', scheme.surface],
     ['on-surface', scheme.onSurface],
     ['surface-variant', scheme.surfaceVariant],
@@ -169,6 +181,7 @@ function applyTheme(scheme: DynamicScheme, mode: 'dark' | 'light') {
     ['background', scheme.background],
     ['on-background', scheme.onBackground],
     ['inverse-surface', scheme.inverseSurface],
+    ['inverse-on-surface', scheme.inverseOnSurface],
     ['inverse-primary', scheme.inversePrimary],
     ['shadow', scheme.shadow],
     ['scrim', scheme.scrim],
@@ -183,38 +196,16 @@ function applyTheme(scheme: DynamicScheme, mode: 'dark' | 'light') {
   for (const [k, v] of tokens) {
     root.setProperty(`--md-sys-color-${k}`, hexFromArgb(v))
   }
-  mapZincToScheme(scheme, mode)
+  // 浏览器地址栏/任务栏主题色跟随 surface
+  updateThemeColor(hexFromArgb(scheme.surface))
 }
 
-// 把 Tailwind 的 zinc 调色板映射到 M3 token，让现有组件无需改动即获得 M3 配色。
-function mapZincToScheme(scheme: DynamicScheme, mode: 'dark' | 'light') {
-  const root = document.documentElement.style
-  const hex = (v: number) => hexFromArgb(v)
-  const map: Record<string, number> = {
-    // 背景/表面：5 层色阶（从深到浅）
-    '--color-zinc-950': scheme.surfaceContainerLowest,
-    '--color-zinc-900': scheme.surfaceContainerLow,
-    '--color-zinc-800': scheme.surfaceContainer,
-    '--color-zinc-700': scheme.surfaceContainerHigh,
-    '--color-zinc-600': scheme.surfaceContainerHighest,
-    // 边框 / 分割线
-    '--color-zinc-500': scheme.outline,
-    '--color-zinc-300': scheme.outlineVariant,
-    // 文字（主/次两级）
-    '--color-zinc-400': scheme.onSurfaceVariant,
-    '--color-zinc-200': scheme.onSurfaceVariant,
-    '--color-zinc-100': scheme.onSurface,
-    '--color-zinc-50': scheme.onSurface,
-    // 强调色
-    '--color-purple-500': scheme.primary,
-    '--color-purple-600': scheme.primary,
-    '--color-pink-500': scheme.tertiary,
-    '--color-emerald-400': scheme.tertiary,
-    '--color-emerald-500': scheme.tertiary,
-    '--color-red-500': scheme.error,
+function updateThemeColor(color: string) {
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    document.head.appendChild(meta)
   }
-  for (const [k, v] of Object.entries(map)) {
-    root.setProperty(k, hex(v))
-  }
-  void mode
+  meta.content = color
 }

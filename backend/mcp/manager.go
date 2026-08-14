@@ -22,6 +22,7 @@ type ManagedServer struct {
 	Env       []string
 	URL       string
 	Headers   map[string]string
+	Internal  bool // 内部 Server：工具不暴露给 LLM，仅后端代码直接调用
 
 	mu          sync.Mutex
 	conn        MCPConn
@@ -87,6 +88,7 @@ func (m *Manager) Add(id, name string, cfg config.MCPServerConfig) {
 		Env:       cfg.Env,
 		URL:       cfg.URL,
 		Headers:   cfg.Headers,
+		Internal:  cfg.Internal,
 	}
 }
 
@@ -246,14 +248,15 @@ func (m *Manager) Stop(id string) {
 	s.tools = nil
 }
 
-// Tools 返回所有运行中 Server 的已启用工具（带 serverID 前缀）
+// Tools 返回所有运行中 Server 的已启用工具（带 serverID 前缀）。
+// 内部 Server（TTS/STT 等）的工具不暴露给 LLM——音频数据不应进 LLM 上下文。
 func (m *Manager) Tools() []Tool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []Tool
 	for _, s := range m.servers {
 		s.mu.Lock()
-		if s.running {
+		if s.running && !s.Internal {
 			for _, t := range s.tools {
 				if s.toolEnabled != nil && !s.toolEnabled[t.Name] {
 					continue // 工具级关闭
@@ -265,6 +268,19 @@ func (m *Manager) Tools() []Tool {
 		s.mu.Unlock()
 	}
 	return out
+}
+
+// InternalRunning 指定内部 Server 是否运行中（TTS/STT 检测用）
+func (m *Manager) InternalRunning(id string) bool {
+	m.mu.Lock()
+	s, ok := m.servers[id]
+	m.mu.Unlock()
+	if !ok {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.running
 }
 
 // Call 调用工具（工具名格式：serverID__toolName）

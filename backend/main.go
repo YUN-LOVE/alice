@@ -51,8 +51,27 @@ func main() {
 		hub.Broadcast(server.WsMessage{Type: "proactive_message", Payload: payload})
 	})
 
+	// 回复语音（assistant_audio）：Kernel 合成后广播，url 为相对路径，前端自行拼接后端地址
+	k.OnAudio(func(urlPath, text string) {
+		payload, _ := json.Marshal(map[string]any{"url": urlPath, "text": text})
+		hub.Broadcast(server.WsMessage{Type: "assistant_audio", Payload: payload})
+	})
+
+	// 上传文件静态服务（音频 / 用户上传文件）
+	uploadsDir := kernel.UploadsDir()
+	if err := os.MkdirAll(filepath.Join(uploadsDir, "audio"), 0o755); err != nil {
+		log.Printf("创建上传目录失败: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(uploadsDir, "files"), 0o755); err != nil {
+		log.Printf("创建上传目录失败: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(uploadsDir, "tmp"), 0o755); err != nil {
+		log.Printf("创建上传目录失败: %v", err)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle(cfg.Main.Server.WSPath, server.HandleWebSocket(hub, k))
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsDir))))
 	server.RegisterRoutes(mux, k)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Main.Server.Host, cfg.Main.Server.Port)

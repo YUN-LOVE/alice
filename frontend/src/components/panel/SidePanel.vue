@@ -12,9 +12,9 @@ const memory = useMemoryStore()
 const mcp = useMCPStore()
 
 const tabs = [
-  { id: 'memory', label: '记忆' },
-  { id: 'mcp', label: 'MCP' },
-  { id: 'emotion', label: '情绪' },
+  { id: 'memory', label: '记忆', icon: 'psychology' },
+  { id: 'mcp', label: 'MCP', icon: 'extension' },
+  { id: 'emotion', label: '情绪', icon: 'sentiment_satisfied' },
 ]
 
 // 切换 tab 时懒加载对应数据
@@ -28,36 +28,52 @@ watch(
 </script>
 
 <template>
-  <Transition
-    enter-active-class="transition duration-200 ease-out"
-    enter-from-class="translate-x-full"
-    leave-active-class="transition duration-200 ease-in"
-    leave-to-class="translate-x-full"
-  >
-    <aside
-      v-if="chat.panelOpen"
-      class="m3-surface-container absolute bottom-0 right-0 top-16 z-40 flex w-full max-w-[340px] flex-col border-l border-zinc-500 md:max-w-[380px]"
-    >
-      <div class="flex items-center justify-between border-b border-zinc-500 px-4 py-3">
-        <div class="flex gap-1">
+  <Teleport to="body">
+    <Transition name="m3-fade">
+      <div
+        v-if="chat.panelOpen"
+        class="m3-scrim"
+        @click="chat.panelOpen = false"
+      />
+    </Transition>
+
+    <Transition name="m3-drawer">
+      <aside
+        v-if="chat.panelOpen"
+        class="m3-drawer"
+        role="dialog"
+        aria-label="侧边面板"
+      >
+        <!-- 精简头部：Tabs 导航 + 关闭（不再是"第二个顶栏"） -->
+        <div class="m3-drawer__head">
+          <div class="m3-tabs flex-1 border-b-0">
+            <button
+              v-for="t in tabs"
+              :key="t.id"
+              class="m3-tab m3-state-layer m3-ripple"
+              :class="{ 'm3-tab--active': chat.panelTab === t.id }"
+              @click="chat.panelTab = t.id"
+            >
+              <span class="m3-icon m3-icon--sm">{{ t.icon }}</span>
+              {{ t.label }}
+            </button>
+          </div>
           <button
-            v-for="t in tabs"
-            :key="t.id"
-            class="rounded-full px-3 py-1.5 text-sm transition"
-            :class="chat.panelTab === t.id ? 'm3-secondary-container' : 'm3-on-surface-variant hover:opacity-80'"
-            @click="chat.panelTab = t.id"
+            class="m3-icon-btn m3-state-layer m3-ripple shrink-0"
+            title="关闭"
+            @click="chat.panelOpen = false"
           >
-            {{ t.label }}
+            <span class="m3-icon">close</span>
           </button>
         </div>
-        <button class="m3-on-surface-variant hover:opacity-80" @click="chat.panelOpen = false">✕</button>
-      </div>
 
-      <div class="flex-1 overflow-y-auto p-4">
-        <MemoryPanel v-if="chat.panelTab === 'memory'" />
-        <MCPPanel v-if="chat.panelTab === 'mcp'" />
-        <EmotionPanel v-if="chat.panelTab === 'emotion'" />
-      </div>
-    </aside>
-  </Transition>
+        <!-- 内容 -->
+        <div class="m3-drawer__body">
+          <MemoryPanel v-if="chat.panelTab === 'memory'" />
+          <MCPPanel v-if="chat.panelTab === 'mcp'" />
+          <EmotionPanel v-if="chat.panelTab === 'emotion'" />
+        </div>
+      </aside>
+    </Transition>
+  </Teleport>
 </template>

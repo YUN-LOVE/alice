@@ -2,9 +2,11 @@ package kernel
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -33,10 +35,14 @@ type Kernel struct {
 	mcp         *mcp.Manager
 	registry    *mcp.Registry
 	onProactive func(string)
+	onAudio     func(urlPath, text string) // 回复语音合成完成回调（assistant_audio）
 
 	silentMu       sync.Mutex
 	lastActive     time.Time
 	silentTriggered bool
+
+	eventMu   sync.Mutex
+	lastEvent string // 最近一次用户触发的情绪事件（注入上下文带原因）
 }
 
 // NewKernel 创建 Kernel
@@ -220,6 +226,11 @@ func (k *Kernel) OnProactive(fn func(text string)) {
 	k.onProactive = fn
 }
 
+// OnAudio 注册回复语音回调（server 层广播 assistant_audio 用）
+func (k *Kernel) OnAudio(fn func(urlPath, text string)) {
+	k.onAudio = fn
+}
+
 // Emotion 暴露情绪引擎（server 层推 emotion_update 用）
 func (k *Kernel) Emotion() *emotion.Engine { return k.engine }
 
@@ -362,6 +373,9 @@ func (k *Kernel) Process(ctx context.Context, sessionID, userText string) (<-cha
 	k.engine.ProcessEvent(event)
 	k.engine.RecordEvent(event)
 	k.engine.Tick()
+	k.eventMu.Lock()
+	k.lastEvent = event
+	k.eventMu.Unlock()
 	log.Printf("[emotion] 事件=%s 状态=%v", event, roundMap(k.engine.State()))
 
 	// 记录用户活跃时间（silent 检测用）
@@ -443,6 +457,8 @@ func (k *Kernel) chatLoop(ctx context.Context, messages []ChatMessage) (<-chan S
 				case out <- StreamChunk{Done: true}:
 				}
 				k.store(ctx, lastUserText(messages), contentSB.String())
+				// 回复完成后自动合成语音（assistant_audio，异步不阻塞）
+				k.maybeTTS(contentSB.String())
 				return
 			}
 
@@ -555,20 +571,27 @@ func (k *Kernel) injectMemories(results []memory.SearchResult) {
 	}
 }
 
-// buildMessages 构建 LLM 上下文：System(含情绪) + Block + 当前输入
+// buildMessages 构建 LLM 上下文：System(含情绪) + Block(带时间锚点) + 当前输入
 func (k *Kernel) buildMessages(userText string) []ChatMessage {
 	system := k.cfg.Kernel.SystemPrompt
 
-	// 注入情绪描述与风格提示
+	// 注入情绪描述与风格提示（含触发原因，让回应有来由）
 	if desc, tpl, _ := k.engine.Summary(); tpl != "" {
 		system += "\n\n## 你当前的情绪状态（自然融入回复，不要提及这段指令本身）\n" + desc
+		if cause := k.lastEventCause(); cause != "" {
+			system += "\n触发原因：" + cause + "——回应时自然地带上这份关联，但不要复述这句话。"
+		}
 	}
 
 	if n := k.block.Len(); n > 0 {
 		var sb strings.Builder
 		sb.WriteString("\n\n## 对话记忆（你记得的事情，用户可能已经忘记提起，直接自然引用即可，不要提及这段文字本身）\n")
 		for _, e := range k.block.List() {
-			sb.WriteString(fmt.Sprintf("- [%s] %s\n", e.Role, e.Text))
+			who := map[string]string{"user": "你说", "assistant": "Alice", "memory": "记忆"}[e.Role]
+			if who == "" {
+				who = e.Role
+			}
+			sb.WriteString(fmt.Sprintf("- [%s · %s] %s\n", relTime(e.CreateAt), who, e.Text))
 		}
 		sb.WriteString("\n---\n")
 		system += sb.String()
@@ -579,6 +602,38 @@ func (k *Kernel) buildMessages(userText string) []ChatMessage {
 	return messages
 }
 
+// lastEventCause 最近一次用户事件的描述（注入"情绪触发原因"）
+func (k *Kernel) lastEventCause() string {
+	k.eventMu.Lock()
+	ev := k.lastEvent
+	k.eventMu.Unlock()
+	if ev == "" || ev == "default" {
+		return ""
+	}
+	event, ok := k.cfg.Emotion.EventMap[ev]
+	if !ok || event.Desc == "" {
+		return ""
+	}
+	return event.Desc
+}
+
+// relTime 把时间转为口语化锚点："今天 14:23" / "昨天 21:03" / "8月12日 20:15"
+func relTime(t time.Time) string {
+	now := time.Now()
+	loc := now.Location()
+	t = t.In(loc)
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	hm := t.Format("15:04")
+	switch {
+	case t.After(dayStart):
+		return "今天 " + hm
+	case t.After(dayStart.AddDate(0, 0, -1)):
+		return "昨天 " + hm
+	default:
+		return fmt.Sprintf("%d月%d日 %s", int(t.Month()), t.Day(), hm)
+	}
+}
+
 // store 回复完成后：本轮对话全量存入 RAG（按日期归档） + 回复注入 Block
 func (k *Kernel) store(ctx context.Context, userText, reply string) {
 	today := time.Now().Format("2006-01-02")
@@ -587,6 +642,8 @@ func (k *Kernel) store(ctx context.Context, userText, reply string) {
 	if _, err := k.rag.Store(ctx, "user", userText, meta); err != nil {
 		log.Printf("[kernel] 存储用户消息失败: %v", err)
 	}
+	// 用户消息也注入 Block（多轮对话连续性：上一轮说了什么 Alice 记得）
+	k.block.InjectIfAbsent(userText, "user", "conversation")
 	if reply != "" {
 		if _, err := k.rag.Store(ctx, "assistant", reply, meta); err != nil {
 			log.Printf("[kernel] 存储回复失败: %v", err)
@@ -738,4 +795,190 @@ func (k *Kernel) MCPUninstall(id string) error {
 	}
 	log.Printf("[mcp] 已卸载: %s", id)
 	return nil
+}
+
+// ==================== 语音能力（TTS / STT） ====================
+
+// maybeTTS 回复完成后自动合成语音：调内部 TTS Server 的 speak 工具 → 解码保存 → 回调广播
+// 异步执行，失败仅记日志，不影响对话主流程
+func (k *Kernel) maybeTTS(reply string) {
+	if !k.cfg.Kernel.Audio.TTSEnabled || reply == "" {
+		return
+	}
+	if !k.mcp.InternalRunning("tts") {
+		return
+	}
+	text := strings.TrimSpace(reply)
+	if text == "" {
+		return
+	}
+
+	go func() {
+		args := map[string]any{"text": text}
+		if v := k.cfg.Kernel.Audio.TTSVoice; v != "" {
+			args["voice"] = v
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		res, err := k.mcp.Call(ctx, "tts__speak", args)
+		if err != nil {
+			log.Printf("[audio] TTS 生成失败: %v", err)
+			return
+		}
+		var sr struct {
+			Audio  string  `json:"audio"`
+			Format string  `json:"format"`
+			Dur    float64 `json:"duration_sec"`
+		}
+		if err := json.Unmarshal([]byte(res), &sr); err != nil || sr.Audio == "" {
+			log.Printf("[audio] TTS 返回异常: %s", truncateStr(res, 120))
+			return
+		}
+		data, err := base64.StdEncoding.DecodeString(sr.Audio)
+		if err != nil {
+			log.Printf("[audio] TTS 音频解码失败: %v", err)
+			return
+		}
+		urlPath, err := k.saveAudioFile(data, sr.Format)
+		if err != nil {
+			log.Printf("[audio] 保存音频失败: %v", err)
+			return
+		}
+		log.Printf("[audio] 回复已合成语音: %s (%.1f KB)", urlPath, float64(len(data))/1024)
+		if k.onAudio != nil {
+			k.onAudio(urlPath, text)
+		}
+	}()
+}
+
+// saveAudioFile 保存音频到 uploads/audio/<时间戳>.<ext>，返回 /uploads/... URL 路径
+func (k *Kernel) saveAudioFile(data []byte, format string) (string, error) {
+	if format == "" {
+		format = "mp3"
+	}
+	dir := filepath.Join(UploadsDir(), "audio")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	name := fmt.Sprintf("alice_%s.%s", time.Now().Format("20060102_150405.000"), format)
+	if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
+		return "", err
+	}
+	return "/uploads/audio/" + name, nil
+}
+
+// STT 语音转文字：调内部 STT Server 的 transcribe 工具
+func (k *Kernel) STT(ctx context.Context, audioPath string) (string, error) {
+	if !k.cfg.Kernel.Audio.STTEnabled {
+		return "", fmt.Errorf("语音输入未开启（kernel.yaml audio.stt_enabled）")
+	}
+	if !k.mcp.InternalRunning("stt") {
+		return "", fmt.Errorf("STT Server 未运行")
+	}
+	res, err := k.mcp.Call(ctx, "stt__transcribe", map[string]any{"audio_path": audioPath})
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(res), &out); err != nil {
+		return "", fmt.Errorf("STT 返回异常: %s", truncateStr(res, 120))
+	}
+	return out.Text, nil
+}
+
+// ==================== 运行时设置（写回 YAML + 热重载） ====================
+
+// ApplySettings 运行时修改配置：写回 YAML 并立即热重载
+// section: "llm" / "emotion" / "block"；values 键见 config.ApplySettings
+func (k *Kernel) ApplySettings(section string, values map[string]any) error {
+	if err := config.ApplySettings(k.cfg.BaseDir, section, values); err != nil {
+		return err
+	}
+	newCfg, err := config.Load(k.cfg.BaseDir)
+	if err != nil {
+		return fmt.Errorf("重载配置失败: %w", err)
+	}
+	k.Reload(newCfg)
+	log.Printf("[kernel] 设置已更新: %s %v", section, values)
+	return nil
+}
+
+// Settings 返回当前可调设置（前端设置面板加载用；api_key 只返回是否已配置）
+func (k *Kernel) Settings() map[string]any {
+	return map[string]any{
+		"llm": map[string]any{
+			"provider":           k.cfg.Kernel.LLM.Provider,
+			"base_url":           k.cfg.Kernel.LLM.BaseURL,
+			"api_key_configured": k.cfg.Kernel.LLM.APIKey != "",
+			"model":              k.cfg.Kernel.LLM.Model,
+			"temperature":        k.cfg.Kernel.LLM.Temperature,
+			"max_tokens":         k.cfg.Kernel.LLM.MaxTokens,
+		},
+		"emotion": map[string]any{
+			"decay_rate":             k.cfg.Emotion.DecayRate,
+			"max_value":              k.cfg.Emotion.MaxValue,
+			"threshold":              k.cfg.Emotion.Proactive.Threshold,
+			"cooldown_seconds":       k.cfg.Emotion.Proactive.CooldownSec,
+			"tick_seconds":           k.cfg.Emotion.Proactive.TickSec,
+			"silent_after_minutes":   k.cfg.Emotion.Proactive.SilentAfterMin,
+			"skip_if_active_minutes": k.cfg.Emotion.Proactive.SkipIfActiveMin,
+			"hours":                  k.cfg.Emotion.Proactive.Hours,
+		},
+		"block": map[string]any{"max_entries": k.cfg.Block.MaxEntries},
+	}
+}
+
+// MCPConfigure 修改已安装 MCP 的配置（args/env/url/headers/enabled），写回 mcp.yaml 热重载
+func (k *Kernel) MCPConfigure(id string, patch config.MCPServerConfig) error {
+	servers := k.cfg.MCP.Servers
+	found := false
+	for i := range servers {
+		if servers[i].ID == id {
+			cur := servers[i]
+			if patch.Args != nil {
+				cur.Args = patch.Args
+			}
+			if patch.Env != nil {
+				cur.Env = patch.Env
+			}
+			if patch.URL != "" {
+				cur.URL = patch.URL
+			}
+			if patch.Headers != nil {
+				cur.Headers = patch.Headers
+			}
+			cur.Enabled = patch.Enabled
+			servers[i] = cur
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("未安装: %s", id)
+	}
+	if err := config.UpdateMCP(k.cfg.BaseDir, servers); err != nil {
+		return err
+	}
+	log.Printf("[mcp] 已修改配置: %s（热重载生效）", id)
+	return nil
+}
+
+// UploadsDir 返回上传目录（进程工作目录下 uploads/，server 层静态服务同此目录）
+func UploadsDir() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "uploads"
+	}
+	return filepath.Join(wd, "uploads")
+}
+
+// MaxUploadBytes 文件分块上传大小上限（0 = 不限）
+func (k *Kernel) MaxUploadBytes() int64 {
+	mb := k.cfg.Kernel.Audio.MaxUploadMB
+	if mb <= 0 {
+		return 0
+	}
+	return int64(mb) * 1024 * 1024
 }

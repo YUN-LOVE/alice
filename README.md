@@ -45,7 +45,8 @@ redis-cli ping               # 应返回 PONG
 
 ```bash
 # 在项目根目录
-make mcp        # 编译 mcp-server/alice-local-tools 与 mcp-vision/alice-vision-tools
+make mcp        # 编译 mcp-server/alice-local-tools、mcp-vision/alice-vision-tools、
+                # mcp-tts/alice-tts（语音合成）、mcp-stt/alice-stt（语音识别）
 make backend    # 编译 backend/alice-server
 ```
 
@@ -105,6 +106,30 @@ export ALICE_VISION_API_KEY=sk-xxx          # 硅基流动等 OpenAI 兼容视�
 export ALICE_VISION_MODEL=Qwen/Qwen2.5-VL-72B-Instruct   # 可选，默认如上
 ```
 
+## 语音能力（TTS / STT）
+
+Alice 现在**会说话、会听**（设计文档 P1 语音能力）：
+
+- **语音输出**：回复完成后自动合成语音（`assistant_audio`），前端底部出现播放条（播放/暂停/进度）；`kernel.yaml` → `audio.tts_enabled` 开关
+- **语音输入**：输入框 🎤 录音 → 转文字填入输入框；`audio.stt_enabled` 开关
+- **发送图片**：输入框 🖼️ 选择图片 → 分块上传（`upload_chunk`）→ 消息带图，Alice 用视觉 MCP 查看
+
+TTS / STT 由两个 **MCP 内部 Server** 提供（`mcp.yaml` 中 `internal: true`，音频数据不进 LLM 上下文）。引擎优先级（密钥不进仓库，环境变量）：
+
+```bash
+# TTS：配 key 走 OpenAI 兼容 API（默认硅基流动 CosyVoice2-0.5B）；不配则用 Edge TTS 免费接口
+export ALICE_TTS_API_KEY=sk-xxx
+# 可选：export ALICE_TTS_BASE_URL / ALICE_TTS_MODEL / ALICE_TTS_VOICE
+
+# STT：配 key 走 OpenAI 兼容 API（默认硅基流动 SenseVoiceSmall）；不配则尝试本地 whisper.cpp
+export ALICE_STT_API_KEY=sk-xxx
+# 可选：export ALICE_STT_BASE_URL / ALICE_STT_MODEL / ALICE_WHISPER_BIN / ALICE_WHISPER_MODEL
+```
+
+## 运行时设置（设置面板）
+
+前端「设置 → 对话」可修改 **LLM（provider/base_url/api_key/model/temperature/max_tokens）**、**情绪引擎（阈值/冷却/衰减率/静默触发等）**、**Memory Block 容量**，保存后写回 YAML 并热重载生效（保留注释与键顺序）。MCP 面板可修改 Server 的 `args/env/url` 配置。
+
 ## 历史聊天记录
 
 每轮对话按时间戳存入 RAG 并打**日期 tag**。前端页面加载时显示**当天的聊天记录**；每天零点自动整理归档（前一天对话归入长期记忆）。没有会话概念——Alice 只有全局一份记忆，私人部署，任何端看到的都是同一份。
@@ -135,12 +160,12 @@ export ALICE_VISION_MODEL=Qwen/Qwen2.5-VL-72B-Instruct   # 可选，默认如上
 ```
 config/
 ├── main.yaml              # 服务端口、日志
-├── kernel.yaml            # LLM、上下文
+├── kernel.yaml            # LLM、上下文、语音（audio）
 ├── emotion.yaml           # 情绪引擎（维度/关系矩阵/衰减/主动推送参数）
 ├── emotion_events.yaml    # 事件→情绪映射（关键词触发）
 ├── memory_rag.yaml        # RAG（阶段二）
 ├── memory_block.yaml      # Memory Block（阶段二）
-├── mcp.yaml               # MCP（servers / 注册表 / 传输方式）
+├── mcp.yaml               # MCP（servers / 注册表 / 传输方式 / internal）
 └── prompts/
     ├── system_prompt.txt  # Alice 人格底座
     └── emotion_templates.yaml
@@ -159,26 +184,30 @@ config/
 | 阶段四++ | MCP 市场：注册表 + 安装/卸载 + 工具级开关（可单独决定用哪个工具） | ✅ 完成 |
 | 阶段五 | 前端补全：侧边面板（记忆查看 / MCP 管理 / 情绪可视化）、主题切换、Markdown 渲染 | ✅ 完成 |
 | Kernel+ | 主动推送增强（LLM 生成 + 存记忆 + silent 触发 + 时段）、情绪记忆、关系矩阵 | ✅ 完成 |
+| 阶段六 | 语音能力：TTS/STT MCP Server（API + Edge/whisper 兜底）、assistant_audio、前端录音与播放控制 | ✅ 完成 |
+| 阶段六+ | 运行时设置：settings_update 写回 YAML + 热重载、设置面板（LLM/情绪/记忆）、mcp_configure、mcp_capabilities、upload_chunk 文件上传 | ✅ 完成 |
 
 ## 目录结构
 
 ```
 alice/
 ├── backend/            # Go 后端（纯 API）
-│   ├── kernel/         # 对话核心 + LLM Client + 主动推送
+│   ├── kernel/         # 对话核心 + LLM Client + 主动推送 + 语音/设置
 │   ├── emotion/        # 情绪引擎（向量/关系矩阵/事件记录）
 │   ├── memory/         # 记忆系统（RAG + Memory Block）
 │   ├── mcp/            # MCP 管理（stdio/HTTP 客户端、市场、注册表）
-│   ├── server/         # WebSocket / HTTP / CORS
-│   └── config/         # YAML 加载 + 热重载
+│   ├── server/         # WebSocket / HTTP / CORS / 分块上传
+│   └── config/         # YAML 加载 + 热重载 + 设置写回
 ├── frontend/           # Astro + Vue3 + Pinia + Tailwind
 │   ├── src/components/ # chat / settings / panel / memory / mcp / emotion
-│   ├── src/services/   # WebSocket、后端地址解析、API、Markdown 渲染
+│   ├── src/services/   # WebSocket、后端地址解析、API、Markdown、语音、上传
 │   └── src/stores/     # Pinia（chat / mcp / memory）
 ├── config/             # 配置文件 + prompts
 ├── docs/               # 文档（API 等）
 ├── mcp-server/         # 内置 MCP：计算器/时间/回显
 ├── mcp-vision/         # 视觉 MCP Server
+├── mcp-tts/            # 语音合成 MCP Server（API + Edge TTS 兜底）
+├── mcp-stt/            # 语音识别 MCP Server（API + whisper 兜底）
 └── registry/           # MCP 市场注册表
 ```
 

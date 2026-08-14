@@ -2,7 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -18,6 +21,11 @@ func RegisterRoutes(mux *http.ServeMux, k *kernel.Kernel) {
 			"embedding": k.EmbedderName(),
 			"memory":    memoryCount(w, r, k),
 		})
+	})
+
+	// 当前可调设置（LLM / 情绪 / 记忆容量），设置面板加载用
+	mux.HandleFunc("GET /api/v1/settings", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, k.Settings())
 	})
 
 	// Memory Block 只读查看
@@ -144,6 +152,13 @@ func RegisterRoutes(mux *http.ServeMux, k *kernel.Kernel) {
 		writeJSON(w, http.StatusOK, map[string]any{"events": events})
 	})
 
+	// 当前情绪状态（面板加载用，避免等待下一次对话的 emotion_update）
+	mux.HandleFunc("GET /api/v1/emotion/state", func(w http.ResponseWriter, r *http.Request) {
+		state := k.Emotion().State()
+		desc, _, top := k.Emotion().Summary()
+		writeJSON(w, http.StatusOK, map[string]any{"state": state, "description": desc, "top": top})
+	})
+
 	// 主动推送开关（查询 / 切换）
 	mux.HandleFunc("GET /api/v1/emotion/proactive", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"enabled": k.ProactiveEnabled()})
@@ -158,6 +173,45 @@ func RegisterRoutes(mux *http.ServeMux, k *kernel.Kernel) {
 		}
 		k.SetProactiveEnabled(body.Enabled)
 		writeJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled})
+	})
+
+	// 语音转文字（STT）：multipart 上传音频 → {text}
+	// 前端录音（MediaRecorder）后上传，后端调内部 STT MCP Server 转写
+	mux.HandleFunc("POST /api/v1/audio/stt", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"message": "解析上传失败: " + err.Error()})
+			return
+		}
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"message": "缺少音频文件字段 (file)"})
+			return
+		}
+		defer file.Close()
+
+		ext := filepath.Ext(filepath.Base(header.Filename))
+		tmp, err := os.CreateTemp(filepath.Join(kernel.UploadsDir(), "tmp"), "stt-*"+ext)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "创建临时文件失败: " + err.Error()})
+			return
+		}
+		defer os.Remove(tmp.Name())
+		if _, err := io.Copy(tmp, file); err != nil {
+			tmp.Close()
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "保存音频失败: " + err.Error()})
+			return
+		}
+		if err := tmp.Close(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "保存音频失败: " + err.Error()})
+			return
+		}
+
+		text, err := k.STT(r.Context(), tmp.Name())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "语音识别失败: " + err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"text": text})
 	})
 }
 

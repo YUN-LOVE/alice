@@ -33,6 +33,20 @@
       "description": "官方 Brave 搜索（需 BRAVE_API_KEY，注册需信用卡验证）",
       "command": "pnpx",
       "args": ["@modelcontextprotocol/server-brave-search"]
+    },
+    {
+      "id": "tts",
+      "name": "语音合成",
+      "description": "文字→语音：配 ALICE_TTS_API_KEY 用 OpenAI 兼容 TTS API，未配则用 Edge TTS 免费接口",
+      "command": "../mcp-tts/alice-tts",
+      "internal": true
+    },
+    {
+      "id": "stt",
+      "name": "语音识别",
+      "description": "语音→文字：配 ALICE_STT_API_KEY 用 OpenAI 兼容 STT API，未配则尝试本地 whisper.cpp",
+      "command": "../mcp-stt/alice-stt",
+      "internal": true
     }
   ]
 }

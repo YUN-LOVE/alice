@@ -61,6 +61,12 @@ func TestChatLoopFunctionCalling(t *testing.T) {
 	defer k.mcp.Stop("local")
 	k.llm = &fakeToolLLM{}
 
+	// 等待内置 MCP Server 就绪：NewKernel 的 StartAll 是异步的，
+	// 与后续工具调用存在时序竞争，这里显式启动（幂等）保证链路可测
+	if err := k.mcp.Start(ctx, "local"); err != nil {
+		t.Fatalf("启动 local MCP 失败: %v", err)
+	}
+
 	out, err := k.chatLoop(ctx, []ChatMessage{
 		{Role: "system", Content: "你是 Alice"},
 		{Role: "user", Content: "帮我计算 2*3"},

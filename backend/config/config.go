@@ -43,12 +43,20 @@ type KernelConfig struct {
 	Context struct {
 		MaxMessages int `yaml:"max_messages"`
 	} `yaml:"context"`
+	// Audio 语音能力（阶段：TTS/STT）
+	Audio struct {
+		TTSEnabled  bool   `yaml:"tts_enabled"`  // 回复完成后自动合成语音并推送 assistant_audio
+		TTSVoice    string `yaml:"tts_voice"`    // 音色（缺省用 TTS Server 默认）
+		STTEnabled  bool   `yaml:"stt_enabled"`  // 语音输入转文字
+		MaxUploadMB int    `yaml:"max_upload_mb"` // 文件分块上传大小上限
+	} `yaml:"audio"`
 	SystemPrompt string `yaml:"-"`
 }
 
 type EmotionEvent struct {
 	Keywords []string          `yaml:"keywords"`
 	Changes  map[string]float64 `yaml:"changes"`
+	Desc     string             `yaml:"desc"` // 事件简短中文描述（注入上下文用）
 }
 
 type EmotionTemplate struct {
@@ -119,6 +127,9 @@ type MCPServerConfig struct {
 	URL       string            `yaml:"url"` // http：MCP 端点地址
 	Headers   map[string]string `yaml:"headers"`
 	Enabled   bool              `yaml:"enabled"`
+	// Internal 内部 Server：工具不暴露给 LLM（如 TTS/STT，音频数据不应进 LLM 上下文），
+	// 但可由后端代码直接调用（serverID__toolName）
+	Internal bool `yaml:"internal"`
 }
 
 type MCPConfig struct {
@@ -246,4 +257,125 @@ func UpdateMCP(configDir string, servers []MCPServerConfig) error {
 		return err
 	}
 	return os.WriteFile(path, out, 0o644)
+}
+
+// UpdateYAMLValue 修改 YAML 文件指定路径的值并写回（路径中间键自动创建）。
+// 用 yaml.Node 操作：保留注释与键顺序，随后 config.Watch 热重载自动生效。
+func UpdateYAMLValue(configDir, filename string, path []string, value any) error {
+	if len(path) == 0 {
+		return fmt.Errorf("路径不能为空")
+	}
+	filePath := filepath.Join(configDir, filename)
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return err
+	}
+	if len(root.Content) == 0 {
+		root.Content = []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}
+	}
+	cur := root.Content[0]
+
+	for i, key := range path {
+		last := i == len(path)-1
+		if cur.Kind != yaml.MappingNode {
+			return fmt.Errorf("路径 %v 处不是映射，无法写入", path[:i])
+		}
+		var found *yaml.Node
+		for j := 0; j+1 < len(cur.Content); j += 2 {
+			if cur.Content[j].Value == key {
+				found = cur.Content[j+1]
+				break
+			}
+		}
+		if found == nil {
+			found = &yaml.Node{}
+			cur.Content = append(cur.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, found)
+		}
+		if last {
+			repl, err := toYAMLNode(value)
+			if err != nil {
+				return err
+			}
+			*found = *repl
+		} else if found.Kind != yaml.MappingNode {
+			*found = yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		}
+		cur = found
+	}
+
+	out, err := yaml.Marshal(&root)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, out, 0o644)
+}
+
+// toYAMLNode 把任意值序列化为 yaml.Node（保留类型：标量/序列/映射）
+func toYAMLNode(v any) (*yaml.Node, error) {
+	data, err := yaml.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	var n yaml.Node
+	if err := yaml.Unmarshal(data, &n); err != nil {
+		return nil, err
+	}
+	if len(n.Content) > 0 {
+		return n.Content[0], nil
+	}
+	return &n, nil
+}
+
+// llmSettingPaths 设置键 → kernel.yaml 路径（文件顶层无命名空间）
+var llmSettingPaths = map[string][]string{
+	"provider":    {"llm", "provider"},
+	"base_url":    {"llm", "base_url"},
+	"api_key":     {"llm", "api_key"},
+	"model":       {"llm", "model"},
+	"temperature": {"llm", "temperature"},
+	"max_tokens":  {"llm", "max_tokens"},
+}
+
+// emotionSettingPaths 设置键 → emotion.yaml 路径（文件有顶层 emotion 命名空间）
+var emotionSettingPaths = map[string][]string{
+	"decay_rate":             {"emotion", "decay_rate"},
+	"max_value":              {"emotion", "max_value"},
+	"threshold":              {"emotion", "proactive", "threshold"},
+	"cooldown_seconds":       {"emotion", "proactive", "cooldown_seconds"},
+	"tick_seconds":           {"emotion", "proactive", "tick_seconds"},
+	"silent_after_minutes":   {"emotion", "proactive", "silent_after_minutes"},
+	"skip_if_active_minutes": {"emotion", "proactive", "skip_if_active_minutes"},
+	"hours":                  {"emotion", "proactive", "hours"},
+}
+
+// ApplySettings 把运行时设置写回 YAML（随后 watcher 热重载自动生效）。
+// section: "llm" / "emotion" / "block"；values 键见各 SettingPaths，未知键忽略。
+func ApplySettings(configDir, section string, values map[string]any) error {
+	var paths map[string][]string
+	var filename string
+	switch section {
+	case "llm":
+		filename, paths = "kernel.yaml", llmSettingPaths
+	case "emotion":
+		filename, paths = "emotion.yaml", emotionSettingPaths
+	case "block":
+		filename = "memory_block.yaml"
+		paths = map[string][]string{"max_entries": {"memory_block", "max_entries"}}
+	default:
+		return fmt.Errorf("未知设置段: %s", section)
+	}
+	for key, value := range values {
+		path, ok := paths[key]
+		if !ok {
+			continue // 忽略未知键
+		}
+		if err := UpdateYAMLValue(configDir, filename, path, value); err != nil {
+			return fmt.Errorf("写入 %s.%s 失败: %w", section, key, err)
+		}
+	}
+	return nil
 }

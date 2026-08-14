@@ -31,6 +31,29 @@ mcp:
       env: []
       enabled: true
 
+    # 语音合成（TTS）：回复完成后自动朗读（assistant_audio）。
+    # 配 ALICE_TTS_API_KEY 走 OpenAI 兼容 TTS API（硅基流动 CosyVoice 等）；
+    # 未配则用 Edge TTS 免费接口（无需 key，需访问微软网络）。
+    # internal: true —— 工具不暴露给 LLM（音频数据不进 LLM 上下文），仅后端直接调用
+    - id: "tts"
+      name: "语音合成"
+      command: "../mcp-tts/alice-tts"
+      args: []
+      env: []
+      enabled: true
+      internal: true
+
+    # 语音识别（STT）：语音输入转文字。
+    # 配 ALICE_STT_API_KEY 走 OpenAI 兼容 STT API（硅基流动 SenseVoice 等）；
+    # 未配则尝试本地 whisper.cpp（ALICE_WHISPER_BIN / ALICE_WHISPER_MODEL）
+    - id: "stt"
+      name: "语音识别"
+      command: "../mcp-stt/alice-stt"
+      args: []
+      env: []
+      enabled: true
+      internal: true
+
     # 备用：DuckDuckGo 免费搜索（无需任何 key/信用卡，但免费后端可能被反爬限流）
     # - id: "search-ddg"
     #   name: "搜索(DDG)"

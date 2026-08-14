@@ -79,5 +79,21 @@ export const useMCPStore = defineStore('mcp', {
       ws.send('mcp_uninstall', { id })
       setTimeout(() => void this.refreshMarket(), 800)
     },
+
+    /** 修改配置（args/env/url/enabled） */
+    configure(id: string, patch: { args?: string[]; env?: string[]; url?: string; enabled?: boolean }) {
+      ws.send('mcp_configure', { id, config: patch })
+      // 等 ack 后刷新
+      setTimeout(() => void this.refresh(), 1500)
+    },
+
+    /** 监听 mcp_capabilities 广播（其他端操作后实时同步） */
+    registerCapabilities() {
+      ws.on('mcp_capabilities', (p: any) => {
+        if (p?.servers) {
+          this.servers = p.servers
+        }
+      })
+    },
   },
 })

@@ -8,10 +8,12 @@ all: mcp backend
 backend:
 	cd backend && go build -o alice-server .
 
-# 内置 MCP Server（本地工具 + 视觉）
+# 内置 MCP Server（本地工具 + 视觉 + 语音合成 + 语音识别）
 mcp:
 	cd mcp-server && go build -o alice-local-tools .
 	cd mcp-vision && go build -o alice-vision-tools .
+	cd mcp-tts && go build -o alice-tts .
+	cd mcp-stt && go build -o alice-stt .
 
 # 前端（pnpm）
 frontend:
@@ -26,4 +28,4 @@ redis:
 	redis-server --daemonize yes --port 6379
 
 clean:
-	rm -f backend/alice-server mcp-server/alice-local-tools mcp-vision/alice-vision-tools
+	rm -f backend/alice-server mcp-server/alice-local-tools mcp-vision/alice-vision-tools mcp-tts/alice-tts mcp-stt/alice-stt

@@ -26,6 +26,9 @@ importers:
       marked:
         specifier: ^18.0.9
         version: 18.0.9
+      material-symbols:
+        specifier: ^0.45.10
+        version: 0.45.10
       pinia:
         specifier: ^4.0.2
         version: 4.0.2(@vue/devtools-api@8.2.1)(vue@3.5.40)
@@ -1574,6 +1577,9 @@ packages:
     resolution: {integrity: sha512-/Sa4qiiHZxf0/FQdBBowr9q4r10krCwMvpK48FUBdXdUXScDxiQGR9zCPrFgRVR5LU3iySOiIjy09ZQvADir1w==}
     engines: {node: '>= 20'}
     hasBin: true
+
+  material-symbols@0.45.10:
+    resolution: {integrity: sha512-2A2mgdfZO4es9DFpIOSMAx3d/7erCLQWRm7zGxA3iXt9jV8e2vNLOszbG3kxzYQ6qp5GAWXVl13de8lS2oHVng==}
 
   mdast-util-to-hast@13.2.1:
     resolution: {integrity: sha512-cctsq2wp5vTsLIcaymblUriiTcZd0CwWtCbLvrOzYCDZoWyMNV8sZ7krj09FSnsiJi3WVsHLM4k6Dq/yaPyCXA==}
@@ -3563,6 +3569,8 @@ snapshots:
       source-map-js: 1.2.1
 
   marked@18.0.9: {}
+
+  material-symbols@0.45.10: {}
 
   mdast-util-to-hast@13.2.1:
     dependencies:
