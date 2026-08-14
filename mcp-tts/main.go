@@ -199,6 +199,11 @@ func speak(sa speakArgs) (*speakResult, error) {
 	if text == "" {
 		return nil, fmt.Errorf("文本为空")
 	}
+	// 清洗无法发声的语素（括号内容/颜文字等），避免被朗读出来
+	text = cleanTTS(text)
+	if text == "" {
+		return nil, fmt.Errorf("文本为空（清洗后无可朗读内容）")
+	}
 	// 保护：超长文本截断（单次合成长度限制）
 	const maxRunes = 2000
 	if r := []rune(text); len(r) > maxRunes {
