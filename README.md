@@ -119,12 +119,20 @@ TTS / STT 由两个 **MCP 内部 Server** 提供（`mcp.yaml` 中 `internal: tru
 ```bash
 # TTS：配 key 走 OpenAI 兼容 API（默认硅基流动 CosyVoice2-0.5B）；不配则用 Edge TTS 免费接口
 export ALICE_TTS_API_KEY=sk-xxx
-# 可选：export ALICE_TTS_BASE_URL / ALICE_TTS_MODEL / ALICE_TTS_VOICE
+# 可选（API 模式）：export ALICE_TTS_BASE_URL / ALICE_TTS_MODEL / ALICE_TTS_VOICE
+
+# Edge TTS 模式可配置项（未配 key 时生效，缺省即用，工具调用参数可覆盖）：
+export ALICE_TTS_EDGE_VOICE="zh-CN-XiaoyiNeural"   # 音色（留空自动尝试候选列表）
+export ALICE_TTS_EDGE_RATE="+10%"                  # 语速：+10% 快一成 / -20% 慢两成
+export ALICE_TTS_EDGE_PITCH="+0Hz"                 # 音高：+5Hz 更尖 / -3Hz 更低沉
+export ALICE_TTS_EDGE_VOLUME="+0%"                 # 音量：+20% 更大 / -50% 更小
 
 # STT：配 key 走 OpenAI 兼容 API（默认硅基流动 SenseVoiceSmall）；不配则尝试本地 whisper.cpp
 export ALICE_STT_API_KEY=sk-xxx
 # 可选：export ALICE_STT_BASE_URL / ALICE_STT_MODEL / ALICE_WHISPER_BIN / ALICE_WHISPER_MODEL
 ```
+
+**语音参数说明**：`speak` 工具的 `voice/rate/pitch/volume` 参数优先级高于环境变量（方便前端或脚本按句控制音色语气）；只配环境变量则全局生效。常用中文音色示例：`zh-CN-XiaoyiNeural`（女声）、`zh-CN-YunxiNeural`（男声）、`en-US-EmmaMultilingualNeural`（官方默认多语言女声）。
 
 ## 运行时设置（设置面板）
 

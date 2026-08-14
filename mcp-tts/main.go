@@ -45,6 +45,15 @@ type speakResult struct {
 	DurationSec float64 `json:"duration_sec"` // 估算时长（秒）
 }
 
+// speakArgs 工具参数（voice/rate/pitch/volume 均为可选，Edge TTS 模式生效）
+type speakArgs struct {
+	Text   string `json:"text"`
+	Voice  string `json:"voice"`
+	Rate   string `json:"rate"`
+	Pitch  string `json:"pitch"`
+	Volume string `json:"volume"`
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	enc := json.NewEncoder(os.Stdout)
@@ -88,12 +97,15 @@ func handle(m *msg, enc *json.Encoder) {
 			"tools": []any{
 				map[string]any{
 					"name":        "speak",
-					"description": "把文本合成语音，返回 base64 音频。用于 Alice 说话（TTS）。",
+					"description": "把文本合成语音，返回 base64 音频。用于 Alice 说话（TTS）。voice/rate/pitch/volume 为可选参数（Edge TTS 模式生效，缺省用环境变量默认值）。",
 					"inputSchema": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
-							"text":  map[string]any{"type": "string", "description": "要朗读的文本"},
-							"voice": map[string]any{"type": "string", "description": "可选音色名，缺省用默认音色"},
+							"text":   map[string]any{"type": "string", "description": "要朗读的文本"},
+							"voice":  map[string]any{"type": "string", "description": "音色名，如 zh-CN-XiaoyiNeural / en-US-EmmaMultilingualNeural"},
+							"rate":   map[string]any{"type": "string", "description": "语速，如 +10% / -20%"},
+							"pitch":  map[string]any{"type": "string", "description": "音高，如 +5Hz / -3Hz"},
+							"volume": map[string]any{"type": "string", "description": "音量，如 +10% / -50%"},
 						},
 						"required": []string{"text"},
 					},
@@ -107,9 +119,23 @@ func handle(m *msg, enc *json.Encoder) {
 		args, _ := params["arguments"].(map[string]any)
 		switch name {
 		case "speak":
-			text, _ := args["text"].(string)
-			voice, _ := args["voice"].(string)
-			out, err := speak(text, voice)
+			sa := speakArgs{}
+			if v, ok := args["text"].(string); ok {
+				sa.Text = v
+			}
+			if v, ok := args["voice"].(string); ok {
+				sa.Voice = v
+			}
+			if v, ok := args["rate"].(string); ok {
+				sa.Rate = v
+			}
+			if v, ok := args["pitch"].(string); ok {
+				sa.Pitch = v
+			}
+			if v, ok := args["volume"].(string); ok {
+				sa.Volume = v
+			}
+			out, err := speak(sa)
 			if err != nil {
 				respond(enc, m.ID, map[string]any{
 					"content": []any{map[string]any{"type": "text", "text": "TTS 失败: " + err.Error()}},
@@ -139,9 +165,9 @@ func respondErr(enc *json.Encoder, id *int64, code int, message string) {
 	_ = enc.Encode(msg{JSONRPC: "2.0", ID: id, Error: &rpcError{Code: code, Message: message}})
 }
 
-// speak 合成语音：API 优先，无 key 降级 Edge TTS
-func speak(text, voice string) (*speakResult, error) {
-	text = strings.TrimSpace(text)
+// speak 合成语音：API 优先，无 key 降级 Edge TTS（支持音色/语速/音高/音量）
+func speak(sa speakArgs) (*speakResult, error) {
+	text := strings.TrimSpace(sa.Text)
 	if text == "" {
 		return nil, fmt.Errorf("文本为空")
 	}
@@ -152,7 +178,13 @@ func speak(text, voice string) (*speakResult, error) {
 	}
 
 	if os.Getenv("ALICE_TTS_API_KEY") != "" {
-		return speakViaAPI(text, voice)
+		return speakViaAPI(text, sa.Voice)
 	}
-	return speakViaEdge(text, voice)
+	p := edgeParams(edgeTTSParams{
+		Voice:  sa.Voice,
+		Rate:   sa.Rate,
+		Pitch:  sa.Pitch,
+		Volume: sa.Volume,
+	})
+	return speakViaEdge(text, p.Voice, p.Rate, p.Pitch, p.Volume)
 }

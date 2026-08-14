@@ -34,13 +34,60 @@ const (
 	edgeDateLayout    = "Mon Jan 02 2006 15:04:05 GMT+0000 (Coordinated Universal Time)"
 )
 
-// edgeVoices 音色候选：官方默认 en-US-EmmaMultilingualNeural（多语言，可读中文），
-// 中文音色次选（微软会不定期下架，逐个尝试）
+// edgeVoices 音色候选（未指定 ALICE_TTS_EDGE_VOICE 时按序尝试）：
+// 官方默认 en-US-EmmaMultilingualNeural（多语言，可读中文），中文音色次选
 var edgeVoices = []string{
 	"en-US-EmmaMultilingualNeural",
 	"zh-CN-XiaoyiNeural",
 	"zh-CN-YunxiNeural",
 	"zh-CN-XiaoxiaoNeural",
+}
+
+// edgeTTSParams Edge TTS 合成参数（环境变量默认值 + 工具参数覆盖）
+type edgeTTSParams struct {
+	Voice  string // 音色
+	Rate   string // 语速，如 "+10%" / "-20%"
+	Pitch  string // 音高，如 "+5Hz" / "-3Hz"
+	Volume string // 音量，如 "+10%" / "-50%"
+}
+
+// edgeParams 读取环境变量默认值：
+//   ALICE_TTS_EDGE_VOICE   音色（留空用候选列表）
+//   ALICE_TTS_EDGE_RATE    语速（默认 +0%）
+//   ALICE_TTS_EDGE_PITCH   音高（默认 +0Hz）
+//   ALICE_TTS_EDGE_VOLUME  音量（默认 +0%）
+func edgeParams(overrides edgeTTSParams) edgeTTSParams {
+	p := edgeTTSParams{
+		Voice:  envOr("ALICE_TTS_EDGE_VOICE", ""),
+		Rate:   envOr("ALICE_TTS_EDGE_RATE", "+0%"),
+		Pitch:  envOr("ALICE_TTS_EDGE_PITCH", "+0Hz"),
+		Volume: envOr("ALICE_TTS_EDGE_VOLUME", "+0%"),
+	}
+	if overrides.Voice != "" {
+		p.Voice = overrides.Voice
+	}
+	if overrides.Rate != "" {
+		p.Rate = overrides.Rate
+	}
+	if overrides.Pitch != "" {
+		p.Pitch = overrides.Pitch
+	}
+	if overrides.Volume != "" {
+		p.Volume = overrides.Volume
+	}
+	return p
+}
+
+// edgeSSML 构造 SSML 请求体（xml:lang 跟随官方固定 en-US，中文音色同样适用）
+func edgeSSML(text, voice, rate, pitch, volume string) string {
+	esc := strings.NewReplacer(
+		"&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&apos;",
+	)
+	return fmt.Sprintf(
+		"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>"+
+			"<voice name='%s'><prosody pitch='%s' rate='%s' volume='%s'>%s</prosody></voice></speak>",
+		voice, pitch, rate, volume, esc.Replace(text),
+	)
 }
 
 // edgeGec 计算 Sec-MS-GEC：当前时间的 Windows FILETIME 值按 5 分钟向下取整，
@@ -64,18 +111,6 @@ func edgeDateString() string {
 	return time.Now().UTC().Format(edgeDateLayout)
 }
 
-// edgeSSML 构造 SSML 请求体（xml:lang 跟随官方固定 en-US，中文音色同样适用）
-func edgeSSML(text, voice string) string {
-	esc := strings.NewReplacer(
-		"&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&apos;",
-	)
-	return fmt.Sprintf(
-		"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>"+
-			"<voice name='%s'><prosody pitch='+0Hz' rate='+0%%' volume='+0%%'>%s</prosody></voice></speak>",
-		voice, esc.Replace(text),
-	)
-}
-
 // edgeSpeechConfig speech.config 消息（带 Path 头的文本消息）
 func edgeSpeechConfig() string {
 	return "X-Timestamp:" + edgeDateString() + "\r\n" +
@@ -87,12 +122,12 @@ func edgeSpeechConfig() string {
 }
 
 // edgeSSMLMessage SSML 请求消息（X-RequestId + Path:ssml 头）
-func edgeSSMLMessage(text, voice string) string {
+func edgeSSMLMessage(text, voice, rate, pitch, volume string) string {
 	return "X-RequestId:" + uuidHex() + "\r\n" +
 		"Content-Type:application/ssml+xml\r\n" +
 		"X-Timestamp:" + edgeDateString() + "Z\r\n" + // 官方 bug：多一个 Z，照抄
 		"Path:ssml\r\n\r\n" +
-		edgeSSML(text, voice)
+		edgeSSML(text, voice, rate, pitch, volume)
 }
 
 // edgeCleanText 移除服务端不支持的控制字符（对齐官方 remove_incompatible_characters）
@@ -125,7 +160,7 @@ func edgeWSURL() string {
 }
 
 // edgeSynthesize 通过 Edge TTS WebSocket 合成语音，返回 MP3 字节
-func edgeSynthesize(text, voice string) ([]byte, error) {
+func edgeSynthesize(text, voice, rate, pitch, volume string) ([]byte, error) {
 	headers := http.Header{
 		"Pragma":              {"no-cache"},
 		"Cache-Control":       {"no-cache"},
@@ -159,7 +194,7 @@ func edgeSynthesize(text, voice string) ([]byte, error) {
 		return nil, fmt.Errorf("发送 speech.config 失败: %w", err)
 	}
 	// 2. SSML
-	if err := conn.WriteMessage(websocket.TextMessage, []byte(edgeSSMLMessage(edgeCleanText(text), voice))); err != nil {
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(edgeSSMLMessage(edgeCleanText(text), voice, rate, pitch, volume))); err != nil {
 		return nil, fmt.Errorf("发送 SSML 失败: %w", err)
 	}
 
@@ -224,15 +259,23 @@ func indexDoubleCRLF(data []byte) int {
 	return -1
 }
 
-// speakViaEdge 尝试默认音色列表，全部失败则报错
-func speakViaEdge(text, voice string) (*speakResult, error) {
-	candidates := edgeVoices
+// speakViaEdge 合成语音：指定音色则精确使用（失败即报错）；
+// 未指定则尝试默认候选列表
+func speakViaEdge(text, voice, rate, pitch, volume string) (*speakResult, error) {
 	if voice != "" {
-		candidates = []string{voice}
+		data, err := edgeSynthesize(text, voice, rate, pitch, volume)
+		if err != nil {
+			return nil, err
+		}
+		return &speakResult{
+			Audio:       base64.StdEncoding.EncodeToString(data),
+			Format:      "mp3",
+			DurationSec: estimateDuration(len(data), "mp3"),
+		}, nil
 	}
 	var lastErr error
-	for _, v := range candidates {
-		data, err := edgeSynthesize(text, v)
+	for _, v := range edgeVoices {
+		data, err := edgeSynthesize(text, v, rate, pitch, volume)
 		if err == nil {
 			return &speakResult{
 				Audio:       base64.StdEncoding.EncodeToString(data),
@@ -242,8 +285,5 @@ func speakViaEdge(text, voice string) (*speakResult, error) {
 		}
 		lastErr = err
 	}
-	if len(candidates) > 1 {
-		return nil, fmt.Errorf("Edge TTS 全部音色失败，最后错误: %v", lastErr)
-	}
-	return nil, lastErr
+	return nil, fmt.Errorf("Edge TTS 全部音色失败，最后错误: %v", lastErr)
 }
