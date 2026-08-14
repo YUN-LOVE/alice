@@ -803,9 +803,11 @@ func (k *Kernel) MCPUninstall(id string) error {
 // 异步执行，失败仅记日志，不影响对话主流程
 func (k *Kernel) maybeTTS(reply string) {
 	if !k.cfg.Kernel.Audio.TTSEnabled || reply == "" {
+		log.Printf("[audio] maybeTTS 跳过: enabled=%v reply_len=%d", k.cfg.Kernel.Audio.TTSEnabled, len(reply))
 		return
 	}
 	if !k.mcp.InternalRunning("tts") {
+		log.Printf("[audio] maybeTTS 跳过: tts server 未运行")
 		return
 	}
 	text := strings.TrimSpace(reply)

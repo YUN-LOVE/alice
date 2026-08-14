@@ -9,6 +9,13 @@ llm:
   max_tokens: 2048
   stream: true
 
+# 语音能力（TTS / STT，由 MCP 内部 Server 提供）
+audio:
+  tts_enabled: true        # 回复完成后自动合成语音并推送 assistant_audio
+  tts_voice: ""            # 音色（留空用 TTS Server 默认）
+  stt_enabled: true        # 语音输入转文字
+  max_upload_mb: 20        # 文件分块上传大小上限（0 = 不限）
+
 # 上下文
 context:
   # Memory Block 最大条数（0 = 无限，阶段一暂未启用）
