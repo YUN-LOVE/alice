@@ -11,8 +11,12 @@ function roleIcon(role: string) {
   return role === 'user' ? 'person' : role === 'assistant' ? 'smart_toy' : 'database'
 }
 
-function fmtTime(sec: number): string {
-  const d = new Date(sec * 1000)
+// create_at 来自 Memory Block API：RFC3339 字符串（如 "2026-08-14T10:00:00+08:00"），
+// 兼容 Unix 秒（历史记录 API）两种格式
+function fmtTime(v: string | number): string {
+  if (!v) return ''
+  const d = typeof v === 'number' ? new Date(v * 1000) : new Date(v)
+  if (Number.isNaN(d.getTime())) return ''
   const hh = String(d.getHours()).padStart(2, '0')
   const mm = String(d.getMinutes()).padStart(2, '0')
   return `${hh}:${mm}`
