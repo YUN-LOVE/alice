@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useChatStore } from '../../stores/chat'
 
 const chat = useChatStore()
@@ -13,6 +13,15 @@ function fmt(sec: number): string {
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+// 尝试播放（静默失败——失败由交互补播/手动按钮兜底）
+function tryPlay() {
+  const el = audio.value
+  if (!el || el.paused === false) return
+  void el.play().catch(() => {
+    playing.value = false
+  })
 }
 
 function togglePlay() {
@@ -40,30 +49,44 @@ function seek(e: Event) {
   current.value = v
 }
 
-// 新语音到来：自动尝试播放（可能被浏览器自动播放策略拦截，拦截后手动点）
+// 新语音到来：自动播放。
+// 浏览器自动播放策略要求用户先与页面交互；用户发消息本身就是交互，
+// 一般可直接播放。若被拦截（首次进入页面就有语音等），
+// 用户之后的任意点击/按键都会自动补播。
 watch(
   () => chat.audio?.url,
-  (url, old) => {
+  async (url, old) => {
     if (url && url !== old) {
       current.value = 0
       duration.value = 0
       playing.value = false
-      const el = audio.value
-      if (el) {
-        void el.play().catch(() => {})
-      }
+      await nextTick() // 等 <audio> 元素挂载完成
+      tryPlay()
     }
   },
 )
 
+// 交互解锁补播：用户任意点击/按键后，若有未播放的语音则自动播放
+function unlockAndPlay() {
+  if (!chat.audio) return
+  tryPlay()
+}
+
+onMounted(() => {
+  window.addEventListener('pointerdown', unlockAndPlay, { passive: true })
+  window.addEventListener('keydown', unlockAndPlay)
+})
+
 onUnmounted(() => {
   audio.value?.pause()
+  window.removeEventListener('pointerdown', unlockAndPlay)
+  window.removeEventListener('keydown', unlockAndPlay)
 })
 </script>
 
 <template>
   <Transition name="m3-slide-up">
-    <div v-if="chat.audio" class="fixed bottom-28 left-1/2 z-40 w-[min(92vw,520px)] -translate-x-1/2">
+    <div v-if="chat.audio" class="fixed left-1/2 top-[76px] z-40 w-[min(92vw,520px)] -translate-x-1/2">
       <div
         class="m3-surface-container-high flex items-center gap-2 rounded-[28px] border border-[var(--md-sys-color-outline-variant)] py-2 pl-2 pr-3 shadow-[var(--md-elevation-3)]"
       >
@@ -76,7 +99,7 @@ onUnmounted(() => {
           @ended="playing = false"
         />
         <button
-          class="m3-icon-btn m3-icon-btn--filled m3-state-layer m3-ripple"
+          class="m3-icon-btn m3-icon-btn--filled m3-state-layer m3-ripple shrink-0"
           :title="playing ? '暂停' : '播放'"
           @click="togglePlay"
         >
@@ -100,7 +123,7 @@ onUnmounted(() => {
           {{ fmt(current) }}/{{ fmt(duration) }}
         </span>
         <button
-          class="m3-icon-btn m3-icon-btn--xs m3-state-layer m3-ripple"
+          class="m3-icon-btn m3-icon-btn--xs m3-state-layer m3-ripple shrink-0"
           title="关闭"
           @click="chat.dismissAudio()"
         >
