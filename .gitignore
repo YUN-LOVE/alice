@@ -17,3 +17,6 @@ backend/uploads/
 
 # pnpm 工作区 store（沙箱环境 store 重定向）
 .pnpm-store/
+
+# headless chromium 测试数据
+.cdp-data/
